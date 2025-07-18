@@ -106,5 +106,13 @@ class PrecomputedInputState(InputState):
 
 
 # quick helper to build the six-dim command vector (vx, vy, yaw, h, roll, pitch)
-def cmd(vx: float) -> list[float]:
-    return [vx, 0.0, 0.0, 0.0, 0.0, 0.0]
+def cmd(vx: float = 0.0, yaw: float = 0.0) -> list[float]:
+    """Return a 6-D ExpandedControlVector (vx, vy, yaw, h, roll, pitch)."""
+    return [vx, 0.0, yaw, 0.0, 0.0, 0.0]
+
+
+def ramp(start: float, end: float, duration_s: float, freq_hz: float) -> list[float]:
+    """Evenly-spaced values from start→end over `duration_s`, at control rate."""
+    n = max(1, int(round(duration_s * freq_hz)))
+    step = (end - start) / n
+    return [start + i * step for i in range(1, n + 1)]
