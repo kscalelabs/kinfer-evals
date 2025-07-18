@@ -109,14 +109,14 @@ async def run_episode(
     # metrics we collect every control tick
     time_s: list[float] = []
 
-    command_vx_world: list[float] = []
-    command_vy_world: list[float] = []
+    command_vx_body: list[float] = []
+    command_vy_body: list[float] = []
 
-    actual_vx_world: list[float] = []
-    actual_vy_world: list[float] = []
+    actual_vx_body: list[float] = []
+    actual_vy_body: list[float] = []
 
-    error_vx_world: list[float] = []
-    error_vy_world: list[float] = []
+    error_vx_body: list[float] = []
+    error_vy_body: list[float] = []
 
     quat0 = sim._data.sensor("imu_site_quat").data
     yaw0 = get_yaw_from_quaternion(quat0)
@@ -149,28 +149,27 @@ async def run_episode(
             yaw = get_yaw_from_quaternion(quat)
             tracker.step((cmd_vx_body, cmd_vy_body), dt_ctrl, heading_rad=yaw)
 
-            # World-frame commanded velocity
+            # ----- convert simulator's world-frame base velocity → body frame -----
+            vx_world = float(sim._data.qvel[0])
+            vy_world = float(sim._data.qvel[1])
+
             cos_yaw, sin_yaw = np.cos(yaw), np.sin(yaw)
-            vx_cmd_w = cos_yaw * cmd_vx_body - sin_yaw * cmd_vy_body
-            vy_cmd_w = sin_yaw * cmd_vx_body + cos_yaw * cmd_vy_body
+            vx_act_body = cos_yaw * vx_world + sin_yaw * vy_world
+            vy_act_body = -sin_yaw * vx_world + cos_yaw * vy_world
 
-            # Actual world-frame base velocity from simulator
-            vx_act_w = float(sim._data.qvel[0])
-            vy_act_w = float(sim._data.qvel[1])
-
-            # Store metrics
+            # ----- store metrics in body frame ------------------------------------
             time_s.append(len(time_s) * dt_ctrl)
 
-            command_vx_world.append(vx_cmd_w)
-            command_vy_world.append(vy_cmd_w)
+            command_vx_body.append(cmd_vx_body)
+            command_vy_body.append(cmd_vy_body)
 
-            actual_vx_world.append(vx_act_w)
-            actual_vy_world.append(vy_act_w)
+            actual_vx_body.append(vx_act_body)
+            actual_vy_body.append(vy_act_body)
 
-            error_vx_world.append(vx_act_w - vx_cmd_w)
-            error_vy_world.append(vy_act_w - vy_cmd_w)
+            error_vx_body.append(vx_act_body - cmd_vx_body)
+            error_vy_body.append(vy_act_body - cmd_vy_body)
 
-            # Yield to event-loop
+            # keep logging the sim state
             log.append(sim.get_state().as_dict())
             await asyncio.sleep(0)
 
@@ -178,14 +177,14 @@ async def run_episode(
         await sim.close()
 
     # Produce plots
-    _plot_velocity_series(time_s, command_vx_world, actual_vx_world, error_vx_world, "x", outdir)
-    _plot_velocity_series(time_s, command_vy_world, actual_vy_world, error_vy_world, "y", outdir)
+    _plot_velocity_series(time_s, command_vx_body, actual_vx_body, error_vx_body, "x", outdir)
+    _plot_velocity_series(time_s, command_vy_body, actual_vy_body, error_vy_body, "y", outdir)
 
     # -------- summary on stdout --------------------------------------------
-    mae_vx = float(np.mean(np.abs(error_vx_world)))
-    mae_vy = float(np.mean(np.abs(error_vy_world)))
-    rmse_vx = float(np.sqrt(np.mean(np.square(error_vx_world))))
-    rmse_vy = float(np.sqrt(np.mean(np.square(error_vy_world))))
+    mae_vx = float(np.mean(np.abs(error_vx_body)))
+    mae_vy = float(np.mean(np.abs(error_vy_body)))
+    rmse_vx = float(np.sqrt(np.mean(np.square(error_vx_body))))
+    rmse_vy = float(np.sqrt(np.mean(np.square(error_vy_body))))
 
     logger.info(
         "\n=== velocity-tracking summary ===\n"
@@ -197,7 +196,7 @@ async def run_episode(
         mae_vy,
         rmse_vx,
         rmse_vy,
-        len(error_vx_world),
+        len(error_vx_body),
     )
 
     return log
