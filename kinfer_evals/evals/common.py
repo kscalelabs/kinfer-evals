@@ -76,20 +76,31 @@ async def load_sim_and_runner(
 
 def _plot_velocity_series(
     time_s: list[float],
-    command_world: list[float],
-    actual_world: list[float],
-    error_world: list[float],
+    command_body: list[float],
+    actual_body: list[float],
+    error_body: list[float],
     axis: str,
     outdir: Path,
 ) -> None:
-    """Save PNG showing commanded vs. actual vs. error for one velocity axis."""
-    fig = plt.figure()
-    plt.plot(time_s, command_world, label=f"command v{axis}")
-    plt.plot(time_s, actual_world, label=f"actual  v{axis}")
-    plt.plot(time_s, error_world, label=f"error   v{axis}")
-    plt.xlabel("time [s]")
-    plt.ylabel(f"v{axis}  [m·s⁻¹]")
-    plt.legend()
+    """Save PNG with two stacked plots."""
+    fig, (ax_top, ax_err) = plt.subplots(
+        2,
+        1,
+        sharex=True,
+        figsize=(7, 4),
+        height_ratios=[3, 1],
+    )
+
+    ax_top.plot(time_s, command_body, label=f"command v{axis}")
+    ax_top.plot(time_s, actual_body, label=f"actual  v{axis}")
+    ax_top.set_ylabel(f"v{axis}  [m·s⁻¹]")
+    ax_top.legend(loc="upper right")
+
+    ax_err.plot(time_s, error_body, label="error", linewidth=1)
+    ax_err.set_xlabel("time [s]")
+    ax_err.set_ylabel("err")
+    ax_err.legend(loc="upper right")
+
     fig.tight_layout()
     outdir.mkdir(parents=True, exist_ok=True)
     fig.savefig(outdir / f"velocity_{axis}.png", dpi=150)
