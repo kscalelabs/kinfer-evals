@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+import time
 from pathlib import Path
 
 from kinfer_sim.provider import ExpandedControlVectorInputState, InputState
@@ -15,8 +16,9 @@ def cmd_factory() -> InputState:
 
 async def _main(args: argparse.Namespace) -> None:
     sim, runner, provider = await load_sim_and_runner(args.kinfer, args.robot, cmd_factory)
-    log = await run_episode(sim, runner, args.seconds, provider)
-    save_json(log, args.out)
+    outdir = args.out / time.strftime("%Y%m%d-%H%M%S")
+    log = await run_episode(sim, runner, args.seconds, outdir, provider)
+    save_json(log, outdir)
 
 
 # python -m kinfer_evals.evals.stand_still tests/assets/kinfer_files/walk_jun22.kinfer kbot-headless

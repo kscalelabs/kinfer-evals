@@ -7,14 +7,15 @@ from pathlib import Path
 from typing import Callable, Protocol, Sequence
 
 import numpy as np
-
 from kinfer.rust_bindings import PyModelRunner
-from kinfer_evals.reference_state import ReferenceStateTracker
 from kinfer_sim.provider import InputState, ModelProvider
 from kinfer_sim.server import find_mjcf, get_model_metadata
 from kinfer_sim.simulator import MujocoSimulator
 from kscale import K
 from kscale.web.gen.api import RobotURDFMetadataOutput
+from matplotlib import pyplot as plt
+
+from kinfer_evals.reference_state import ReferenceStateTracker
 
 
 class CommandFactory(Protocol):
@@ -70,21 +71,52 @@ async def load_sim_and_runner(
     return sim, runner, provider
 
 
+def _plot_velocity_series(
+    time_s: list[float],
+    command_world: list[float],
+    actual_world: list[float],
+    error_world: list[float],
+    axis: str,
+    outdir: Path,
+) -> None:
+    """Save PNG showing commanded vs. actual vs. error for one velocity axis."""
+    fig = plt.figure()
+    plt.plot(time_s, command_world, label=f"command v{axis}")
+    plt.plot(time_s, actual_world, label=f"actual  v{axis}")
+    plt.plot(time_s, error_world, label=f"error   v{axis}")
+    plt.xlabel("time [s]")
+    plt.ylabel(f"v{axis}  [m·s⁻¹]")
+    plt.legend()
+    fig.tight_layout()
+    outdir.mkdir(parents=True, exist_ok=True)
+    fig.savefig(outdir / f"velocity_{axis}.png", dpi=150)
+    plt.close(fig)
+
+
 async def run_episode(
     sim: MujocoSimulator,
     runner: PyModelRunner,
     seconds: float,
+    outdir: Path,
     provider: ModelProvider | None = None,
 ) -> list[dict]:
-    """Physics → inference → action loop with reference-error tracking."""
+    """Physics → inference → actuation loop + reference-error logging & plots."""
     tracker = ReferenceStateTracker()
-    cumulative_pos_err = 0.0
-    cumulative_vel_err = 0.0
-    samples = 0
 
-    # grab initial world-frame heading
-    quat = sim._data.sensor("imu_site_quat").data
-    yaw0 = get_yaw_from_quaternion(quat)
+    # metrics we collect every control tick
+    time_s: list[float] = []
+
+    command_vx_world: list[float] = []
+    command_vy_world: list[float] = []
+
+    actual_vx_world: list[float] = []
+    actual_vy_world: list[float] = []
+
+    error_vx_world: list[float] = []
+    error_vy_world: list[float] = []
+
+    quat0 = sim._data.sensor("imu_site_quat").data
+    yaw0 = get_yaw_from_quaternion(quat0)
     tracker.reset(tuple(sim._data.qpos[:2]), heading_rad=yaw0)
 
     carry, log, t0 = runner.init(), [], time.time()
@@ -92,58 +124,59 @@ async def run_episode(
 
     try:
         while time.time() - t0 < seconds:
-
             # Step physics
             for _ in range(sim.sim_decimation):
                 await sim.step()
 
-            # Step command bookkeeping
+            # Advance command index if we're using a PrecomputedInputState
             if provider and hasattr(provider.keyboard_state, "step"):
                 provider.keyboard_state.step()
 
             # Get commands
-            vx_cmd_b, vy_cmd_b = 0.0, 0.0
+            cmd_vx_body = cmd_vy_body = 0.0
             if provider is not None:
-                cmd_vec = provider.keyboard_state.value
-                vx_cmd_b, vy_cmd_b = cmd_vec[0], cmd_vec[1]
+                cmd_vx_body, cmd_vy_body = provider.keyboard_state.value[:2]
 
-            # Inference (get action)
+            # Inference
             out, carry = runner.step(carry)
             runner.take_action(out)
 
             # Update reference state
             quat = sim._data.sensor("imu_site_quat").data
             yaw = get_yaw_from_quaternion(quat)
-            tracker.step((vx_cmd_b, vy_cmd_b), dt_ctrl, heading_rad=yaw)
+            tracker.step((cmd_vx_body, cmd_vy_body), dt_ctrl, heading_rad=yaw)
 
-            # Calculate error metrics
-            # position error
-            act_xy = sim._data.qpos[:2]
-            err_pos = float(np.linalg.norm(act_xy - tracker.pos))
+            # World-frame commanded velocity
+            cos_yaw, sin_yaw = np.cos(yaw), np.sin(yaw)
+            vx_cmd_w = cos_yaw * cmd_vx_body - sin_yaw * cmd_vy_body
+            vy_cmd_w = sin_yaw * cmd_vx_body + cos_yaw * cmd_vy_body
 
-            # velocity error (world frame)
-            c, s = np.cos(yaw), np.sin(yaw)
-            cmd_vx_w = c * vx_cmd_b - s * vy_cmd_b
-            cmd_vy_w = s * vx_cmd_b + c * vy_cmd_b
-            act_vx_w, act_vy_w = sim._data.qvel[0], sim._data.qvel[1]
-            err_vel = float(np.hypot(act_vx_w - cmd_vx_w, act_vy_w - cmd_vy_w))
+            # Actual world-frame base velocity from simulator
+            vx_act_w = float(sim._data.qvel[0])
+            vy_act_w = float(sim._data.qvel[1])
 
-            cumulative_pos_err += err_pos
-            cumulative_vel_err += err_vel
-            samples += 1
+            # Store metrics
+            time_s.append(len(time_s) * dt_ctrl)
 
-            # Log
+            command_vx_world.append(vx_cmd_w)
+            command_vy_world.append(vy_cmd_w)
+
+            actual_vx_world.append(vx_act_w)
+            actual_vy_world.append(vy_act_w)
+
+            error_vx_world.append(vx_act_w - vx_cmd_w)
+            error_vy_world.append(vy_act_w - vy_cmd_w)
+
+            # Yield to event-loop
             log.append(sim.get_state().as_dict())
             await asyncio.sleep(0)
+
     finally:
         await sim.close()
 
-    if samples:
-        print(
-            f"[eval] ⌀ position error {cumulative_pos_err/samples:.4f} m   "
-            f"⌀ velocity error {cumulative_vel_err/samples:.4f} m/s   "
-            f"({samples} samples)"
-        )
+    # Produce plots
+    _plot_velocity_series(time_s, command_vx_world, actual_vx_world, error_vx_world, "x", outdir)
+    _plot_velocity_series(time_s, command_vy_world, actual_vy_world, error_vy_world, "y", outdir)
 
     return log
 
@@ -170,7 +203,6 @@ class PrecomputedInputState(InputState):
             self.value = self._cmds[self._idx]
 
 
-# quick helper to build the six-dim command vector (vx, vy, yaw, h, roll, pitch)
 def cmd(vx: float = 0.0, yaw: float = 0.0) -> list[float]:
     """Return a 6-D ExpandedControlVector (vx, vy, yaw, h, roll, pitch)."""
     return [vx, 0.0, yaw, 0.0, 0.0, 0.0]

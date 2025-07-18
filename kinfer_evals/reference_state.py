@@ -1,6 +1,7 @@
 """Reference-state utilities."""
 
 from dataclasses import dataclass, field
+
 import numpy as np
 
 
@@ -12,8 +13,7 @@ class ReferenceStateTracker:
         return np.zeros(2, dtype=np.float32)
 
     pos: np.ndarray = field(default_factory=_make_zeros)
-    heading_rad: float = 0.0 # world-frame yaw used for rotation
-
+    heading_rad: float = 0.0  # world-frame yaw used for rotation
 
     def reset(
         self,

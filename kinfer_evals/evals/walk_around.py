@@ -20,8 +20,6 @@ from pathlib import Path
 
 from kinfer_evals.evals.common import PrecomputedInputState, cmd, load_sim_and_runner, ramp, run_episode, save_json
 
-# --------------------------------------------------------------------------- #
-
 
 def make_commands(freq_hz: float) -> list[list[float]]:
     """Walk-around command script with 1 s yaw transition + 1 s hold."""
@@ -66,9 +64,6 @@ def make_commands(freq_hz: float) -> list[list[float]]:
     return seq
 
 
-# --------------------------------------------------------------------------- #
-
-
 async def _run(args: argparse.Namespace) -> None:
     # Boot sim once to learn control frequency.
     sim, runner, provider = await load_sim_and_runner(
@@ -84,14 +79,12 @@ async def _run(args: argparse.Namespace) -> None:
     provider.keyboard_state = PrecomputedInputState(commands)  # type: ignore[attr-defined]
 
     seconds = len(commands) / freq
-    log = await run_episode(sim, runner, seconds, provider)
-
     outdir = args.out / time.strftime("%Y%m%d-%H%M%S")
+    log = await run_episode(sim, runner, seconds, outdir, provider)
+
     save_json(log, outdir, "walk_around_log.json")
     save_json(commands, outdir, "commands.json")
 
-
-# --------------------------------------------------------------------------- #
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()

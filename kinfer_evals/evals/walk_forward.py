@@ -59,10 +59,10 @@ async def _main(args: argparse.Namespace) -> None:
 
     # episode length = command_count / freq seconds
     seconds = len(commands) / freq
-    log = await run_episode(sim, runner, seconds, provider)
+    outdir = args.out / time.strftime("%Y%m%d-%H%M%S")
+    log = await run_episode(sim, runner, seconds, outdir, provider)
 
     # also dump the command list for inspection
-    outdir = args.out / time.strftime("%Y%m%d-%H%M%S")
     save_json(log, outdir, "walk_log.json")
     save_json(commands, outdir, "commands.json")
 
