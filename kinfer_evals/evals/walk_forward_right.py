@@ -84,7 +84,7 @@ async def _run(args: argparse.Namespace) -> None:
     outdir = args.out / time.strftime("%Y%m%d-%H%M%S")
     log = await run_episode(sim, runner, seconds, outdir, provider)
 
-    save_json(log, outdir, "walk_around_log.json")
+    save_json(log, outdir, "walk_forward_right_log.json")
     save_json(commands, outdir, "commands.json")
 
 
@@ -94,5 +94,5 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("kinfer", type=Path)
     p.add_argument("robot")
-    p.add_argument("--out", type=Path, default=Path("runs/walk_around"))
+    p.add_argument("--out", type=Path, default=Path("runs/walk_forward_right"))
     asyncio.run(_run(p.parse_args()))
