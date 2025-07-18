@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 import time
 from pathlib import Path
 from typing import Callable, Protocol, Sequence
@@ -16,6 +17,8 @@ from kscale.web.gen.api import RobotURDFMetadataOutput
 from matplotlib import pyplot as plt
 
 from kinfer_evals.reference_state import ReferenceStateTracker
+
+logger = logging.getLogger(__name__)
 
 
 class CommandFactory(Protocol):
@@ -177,6 +180,25 @@ async def run_episode(
     # Produce plots
     _plot_velocity_series(time_s, command_vx_world, actual_vx_world, error_vx_world, "x", outdir)
     _plot_velocity_series(time_s, command_vy_world, actual_vy_world, error_vy_world, "y", outdir)
+
+    # -------- summary on stdout --------------------------------------------
+    mae_vx = float(np.mean(np.abs(error_vx_world)))
+    mae_vy = float(np.mean(np.abs(error_vy_world)))
+    rmse_vx = float(np.sqrt(np.mean(np.square(error_vx_world))))
+    rmse_vy = float(np.sqrt(np.mean(np.square(error_vy_world))))
+
+    logger.info(
+        "\n=== velocity-tracking summary ===\n"
+        "Mean-abs error  vx: %.4f m/s   vy: %.4f m/s\n"
+        "RMSE            vx: %.4f m/s   vy: %.4f m/s\n"
+        "samples: %d\n"
+        "==================================\n",
+        mae_vx,
+        mae_vy,
+        rmse_vx,
+        rmse_vy,
+        len(error_vx_world),
+    )
 
     return log
 

@@ -18,6 +18,8 @@ import asyncio
 import time
 from pathlib import Path
 
+import colorlogging
+
 from kinfer_evals.evals.common import PrecomputedInputState, cmd, load_sim_and_runner, ramp, run_episode, save_json
 
 
@@ -87,6 +89,8 @@ async def _run(args: argparse.Namespace) -> None:
 
 
 if __name__ == "__main__":
+    colorlogging.configure()
+
     p = argparse.ArgumentParser()
     p.add_argument("kinfer", type=Path)
     p.add_argument("robot")

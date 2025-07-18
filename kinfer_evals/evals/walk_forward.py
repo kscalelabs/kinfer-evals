@@ -5,6 +5,8 @@ import asyncio
 import time
 from pathlib import Path
 
+import colorlogging
+
 from kinfer_evals.evals.common import (  # shared helpers
     PrecomputedInputState,
     cmd,  # just added above
@@ -69,6 +71,8 @@ async def _main(args: argparse.Namespace) -> None:
 
 # python -m kinfer_evals.evals.walk_forward tests/assets/kinfer_files/walk_jun22.kinfer kbot-headless
 if __name__ == "__main__":
+    colorlogging.configure()
+
     p = argparse.ArgumentParser()
     p.add_argument("kinfer", type=Path)
     p.add_argument("robot")
