@@ -14,9 +14,10 @@ def cmd_factory() -> InputState:
 
 
 async def _main(args: argparse.Namespace) -> None:
-    sim, runner = await load_sim_and_runner(args.kinfer, args.robot, cmd_factory)
-    log = await run_episode(sim, runner, args.seconds)
+    sim, runner, provider = await load_sim_and_runner(args.kinfer, args.robot, cmd_factory)
+    log = await run_episode(sim, runner, args.seconds, provider)
     save_json(log, args.out)
+
 
 # python -m kinfer_evals.evals.stand_still tests/assets/kinfer_files/walk_jun22.kinfer kbot-headless
 if __name__ == "__main__":

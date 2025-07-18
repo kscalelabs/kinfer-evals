@@ -42,7 +42,7 @@ async def load_sim_and_runner(
     cmd_factory: CommandFactory,
     *,
     make_sim: Callable[..., MujocoSimulator] = default_sim,
-) -> tuple[MujocoSimulator, PyModelRunner]:
+) -> tuple[MujocoSimulator, PyModelRunner, ModelProvider]:
     """Shared download + construction logic."""
     async with K() as api:
         model_dir, meta = await asyncio.gather(
@@ -54,13 +54,14 @@ async def load_sim_and_runner(
     sim = make_sim(mjcf, meta)
     provider = ModelProvider(sim, keyboard_state=cmd_factory())
     runner = PyModelRunner(str(kinfer), provider)
-    return sim, runner
+    return sim, runner, provider
 
 
 async def run_episode(
     sim: MujocoSimulator,
     runner: PyModelRunner,
     seconds: float,
+    provider: ModelProvider | None = None,
 ) -> list[dict]:
     """Physics → inference → action loop."""
     carry, log, t0 = runner.init(), [], time.time()
@@ -68,6 +69,11 @@ async def run_episode(
         while time.time() - t0 < seconds:
             for _ in range(sim.sim_decimation):
                 await sim.step()
+
+            # If using PrecomputedInputState, advance to next command
+            if provider and hasattr(provider.keyboard_state, "step"):
+                provider.keyboard_state.step()
+
             out, carry = runner.step(carry)
             runner.take_action(out)
             log.append(sim.get_state().as_dict())
@@ -80,3 +86,25 @@ async def run_episode(
 def save_json(log: Sequence[dict], out: Path, fname: str = "log.json") -> None:
     out.mkdir(parents=True, exist_ok=True)
     (out / fname).write_text(json.dumps(log, indent=2))
+
+
+class PrecomputedInputState(InputState):
+    """InputState that walks through a pre-computed command list."""
+
+    def __init__(self, commands: list[list[float]]) -> None:
+        self._cmds = commands
+        self._idx = 0
+        self.value = self._cmds[0]
+
+    async def update(self, _key: str) -> None:  # not used here
+        pass
+
+    def step(self) -> None:  # advance one tick
+        if self._idx + 1 < len(self._cmds):
+            self._idx += 1
+            self.value = self._cmds[self._idx]
+
+
+# quick helper to build the six-dim command vector (vx, vy, yaw, h, roll, pitch)
+def cmd(vx: float) -> list[float]:
+    return [vx, 0.0, 0.0, 0.0, 0.0, 0.0]
