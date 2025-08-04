@@ -16,6 +16,7 @@ from kscale import K
 from kscale.web.gen.api import RobotURDFMetadataOutput
 from matplotlib import pyplot as plt
 
+from kinfer_evals.core.types import RunArgs
 from kinfer_evals.reference_state import ReferenceStateTracker
 
 logger = logging.getLogger(__name__)
@@ -218,6 +219,40 @@ def save_json(log: Sequence[dict], out: Path, fname: str = "log.json") -> None:
     (out / fname).write_text(json.dumps(log, indent=2))
 
 
+async def run_factory(
+    args: RunArgs,
+    cmd_factory: Callable[[], InputState],
+    make_commands: Callable[[float], list[list[float]]] | None = None,
+) -> None:
+    """
+    Spin up the sim/runner, optionally precompute a command list, and
+    execute `run_episode`.  Used by every eval.
+
+    Args:
+        args: common parsed arguments (kinfer, robot, out, seconds, …).
+        cmd_factory: 0-arg callable that returns a *stateful* InputState.
+        make_commands: if provided, we run the sim once to learn control
+            frequency, build the command list *before* the episode starts,
+            and replace the provider’s keyboard_state with a PrecomputedInputState.
+    """
+    sim, runner, provider = await load_sim_and_runner(
+        args.kinfer,
+        args.robot,
+        cmd_factory=cmd_factory,
+    )
+
+    # Pre-compute commands if requested
+    if make_commands is not None:
+        freq = sim._control_frequency
+        commands = make_commands(freq)
+        provider.keyboard_state = PrecomputedInputState(commands)      # type: ignore[attr-defined]
+        args.seconds = len(commands) / freq
+
+    outdir = args.out / time.strftime("%Y%m%d-%H%M%S")
+    log = await run_episode(sim, runner, args.seconds, outdir, provider)
+    save_json(log, outdir, f"{args.name}_log.json")
+
+
 class PrecomputedInputState(InputState):
     """InputState that walks through a pre-computed command list."""
 
@@ -237,7 +272,7 @@ class PrecomputedInputState(InputState):
 
 def cmd(vx: float = 0.0, yaw: float = 0.0) -> list[float]:
     """Return a 6-D ExpandedControlVector (vx, vy, yaw, h, roll, pitch)."""
-    return [vx, 0.0, yaw, 0.0, 0.0, 0.0]
+    return [vx, 0.0, yaw]
 
 
 def ramp(start: float, end: float, duration_s: float, freq_hz: float) -> list[float]:

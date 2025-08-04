@@ -20,7 +20,8 @@ from pathlib import Path
 
 import colorlogging
 
-from kinfer_evals.evals.common import PrecomputedInputState, cmd, load_sim_and_runner, ramp, run_episode, save_json
+from kinfer_evals.core.eval_runtime import PrecomputedInputState, cmd, ramp, run_factory
+from kinfer_evals.core.types import RunArgs
 
 
 def make_commands(freq_hz: float) -> list[list[float]]:
@@ -67,25 +68,17 @@ def make_commands(freq_hz: float) -> list[list[float]]:
 
 
 async def _run(args: argparse.Namespace) -> None:
-    # Boot sim once to learn control frequency.
-    sim, runner, provider = await load_sim_and_runner(
-        args.kinfer,
-        args.robot,
-        cmd_factory=lambda: PrecomputedInputState([cmd()]),  # placeholder
+    await run_factory(
+        RunArgs(
+            name="walk_forward_right",
+            kinfer=args.kinfer,
+            robot=args.robot,
+            out=args.out,
+            seconds=0.0,  # overwritten
+        ),
+        cmd_factory=lambda: PrecomputedInputState([cmd()]),
+        make_commands=make_commands,
     )
-
-    freq = sim._control_frequency
-    commands = make_commands(freq)
-
-    # Swap in the real pre-computed state.
-    provider.keyboard_state = PrecomputedInputState(commands)  # type: ignore[attr-defined]
-
-    seconds = len(commands) / freq
-    outdir = args.out / time.strftime("%Y%m%d-%H%M%S")
-    log = await run_episode(sim, runner, seconds, outdir, provider)
-
-    save_json(log, outdir, "walk_forward_right_log.json")
-    save_json(commands, outdir, "commands.json")
 
 
 if __name__ == "__main__":

@@ -7,13 +7,12 @@ from pathlib import Path
 
 import colorlogging
 
-from kinfer_evals.evals.common import (  # shared helpers
+from kinfer_evals.core.eval_runtime import (
     PrecomputedInputState,
-    cmd,  # just added above
-    load_sim_and_runner,
-    run_episode,
-    save_json,
+    cmd,
+    run_factory,
 )
+from kinfer_evals.core.types import RunArgs
 
 
 def make_commands(freq_hz: float) -> list[list[float]]:
@@ -45,28 +44,17 @@ def make_commands(freq_hz: float) -> list[list[float]]:
 
 
 async def _main(args: argparse.Namespace) -> None:
-    # We must know the control frequency before building the list,
-    # so we spin up the simulator first (then build, then replace its state).
-    sim, runner, provider = await load_sim_and_runner(
-        args.kinfer,
-        args.robot,
-        cmd_factory=lambda: PrecomputedInputState([cmd(0.0)]),  # placeholder
+    await run_factory(
+        RunArgs(
+            name="walk_forward",
+            kinfer=args.kinfer,
+            robot=args.robot,
+            out=args.out,
+            seconds=0.0,          # overwritten inside run_factory
+        ),
+        cmd_factory=lambda: PrecomputedInputState([cmd(0.0)]),
+        make_commands=make_commands,
     )
-
-    freq = sim._control_frequency  # e.g. 1 000 Hz
-    commands = make_commands(freq)
-
-    # swap in the real pre-computed state (keep provider alive)
-    provider.keyboard_state = PrecomputedInputState(commands)
-
-    # episode length = command_count / freq seconds
-    seconds = len(commands) / freq
-    outdir = args.out / time.strftime("%Y%m%d-%H%M%S")
-    log = await run_episode(sim, runner, seconds, outdir, provider)
-
-    # also dump the command list for inspection
-    save_json(log, outdir, "walk_log.json")
-    save_json(commands, outdir, "commands.json")
 
 
 # python -m kinfer_evals.evals.walk_forward tests/assets/kinfer_files/walk_jun22.kinfer kbot-headless
