@@ -20,7 +20,7 @@ from pathlib import Path
 
 import colorlogging
 
-from kinfer_evals.core.eval_runtime import PrecomputedInputState, cmd, ramp, run_factory
+from kinfer_evals.core.eval_engine import PrecomputedInputState, cmd, ramp, run_factory
 from kinfer_evals.core.types import RunArgs
 
 

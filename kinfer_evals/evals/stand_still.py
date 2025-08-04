@@ -8,7 +8,7 @@ from pathlib import Path
 import colorlogging
 from kinfer_sim.provider import ControlVectorInputState, InputState
 
-from kinfer_evals.core.eval_runtime import run_factory
+from kinfer_evals.core.eval_engine import run_factory
 from kinfer_evals.core.types import RunArgs
 
 
