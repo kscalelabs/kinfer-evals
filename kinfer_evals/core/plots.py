@@ -1,238 +1,150 @@
 """Plotting utilities."""
 
+from __future__ import annotations
 from pathlib import Path
-from typing import Mapping
+from typing import Iterable
 
 import numpy as np
+import textwrap
 from matplotlib import pyplot as plt
 from matplotlib.collections import LineCollection
 from matplotlib import colors
-import textwrap
 
 
-
-def _wrap_footer(pairs: list[tuple[str, str]], fig, font_size_pt: int = 11) -> str:
+def _wrap_footer(pairs: list[tuple[str, str]], fig, *, font_size_pt: int = 11) -> str:
     """
     Return a single multiline string where each pair (label, text) is rendered
     as `label: text`, wrapped so that no line exceeds the current figure width.
 
     We approximate the number of characters that fit:
-        usable_px ≈ fig_width_inch * dpi  ·  0.96   (leave a tiny margin)
+        usable_px ≈ fig_width_inch * dpi  ·  0.66   (leave a tiny margin)
         char_px   ≈ 0.6 · font_size_pt    (empirical for most sans-serif fonts)
     """
     fig_w_px = fig.get_size_inches()[0] * fig.dpi * 0.66
     max_chars = max(20, int(fig_w_px / (0.6 * font_size_pt)))
 
-    wrapped_lines: list[str] = []
+    out: list[str] = []
     for label, text in pairs:
         prefix = f"{label}: "
-        # wrap text so *content* fits; subtract prefix length
-        # (break_long_words=True lets us split a long path with no spaces)
-        chunks = textwrap.wrap(
-            text,
-            width=max_chars - len(prefix),
-            break_long_words=True,
-            break_on_hyphens=False,
-        )
-        if not chunks:                           # empty string -> still print label
-            wrapped_lines.append(prefix.rstrip())
-            continue
-        wrapped_lines.append(prefix + chunks[0])
-        pad = " " * len(prefix)
-        for chunk in chunks[1:]:
-            wrapped_lines.append(pad + chunk)
-
-    return "\n".join(wrapped_lines)
+        for i, chunk in enumerate(
+            textwrap.wrap(text, width=max_chars - len(prefix),
+                          break_long_words=True, break_on_hyphens=False) or [""]
+        ):
+            out.append(prefix + chunk if i == 0 else " " * len(prefix) + chunk)
+    return "\n".join(out)
 
 
-def _plot_velocity_series(
-    time_s: list[float],
-    command_body: list[float],
-    actual_body: list[float],
-    error_body: list[float],
-    axis: str,
-    outdir: Path,
-    run_info: dict[str, str],
-) -> None:
-    """Save PNG with two stacked plots."""
-    fig, (ax_top, ax_err) = plt.subplots(
-        2,
-        1,
-        sharex=True,
-        figsize=(7, 5),            # +1 inch for footer
-        height_ratios=[3, 1],
-    )
-    # reserve bottom 20 % for the footer
-    fig.tight_layout(rect=(0, 0.20, 1, 1))
-
-    ax_top.plot(time_s, command_body, label=f"command v{axis}")
-    ax_top.plot(time_s, actual_body, label=f"actual  v{axis}")
-    ax_top.set_title(f"Body-frame velocity tracking – v{axis}", pad=8)
-    ax_top.set_ylabel(f"v{axis}  [m·s⁻¹]")
-    ax_top.legend(loc="upper right")
-
-    ax_err.plot(time_s, error_body, label="error", linewidth=1)
-    ax_err.set_xlabel("time [s]")
-    ax_err.set_ylabel("err")
-    ax_err.legend(loc="upper right")
-
-    # ---------- footer ----------------------------------------------------
-    footer_text = _wrap_footer(
-        [
-            ("kinfer",    run_info["kinfer"]),
-            ("robot",     run_info["robot"]),
-            ("eval",      run_info["eval_name"]),
-            ("timestamp", run_info["timestamp"]),
-            ("outdir",    run_info["outdir"]),
-        ],
-        fig,
-        font_size_pt=12,
-    )
+def _add_footer(fig, run_info: dict[str, str]) -> None:
+    """Add a standardized footer with run information to the figure."""
     fig.text(
         0.0, -0.02,
-        footer_text,
+        _wrap_footer(
+            [(k, run_info[k]) for k in ("kinfer", "robot", "eval_name", "timestamp", "outdir")],
+            fig, font_size_pt=12),
         ha="left", va="top",
         fontsize=12, family="monospace", linespacing=1.4,
     )
 
-    outdir.mkdir(parents=True, exist_ok=True)
-    fig.savefig(outdir / f"velocity_{axis}.png", dpi=150, bbox_inches="tight")
-    plt.close(fig)
 
 
 
-
-def _plot_accel_series(
-    time_s: list[float],
-    command_body: list[float],
-    actual_body: list[float],
-    error_body: list[float],
-    axis: str,
-    outdir: Path,
-    run_info: dict[str, str],
-) -> None:
-    """
-    Plot commanded-vs-actual body-frame acceleration (m s⁻²) and the error
-    for a single axis *axis* ∈ {'x', 'y', 'mag'}.
-    """
+def _make_fig_with_footer() -> tuple[plt.Figure, tuple[plt.Axes, plt.Axes]]:
+    """Create a standardized 2-panel figure with space reserved for footer."""
     fig, (ax_top, ax_err) = plt.subplots(
         2, 1, sharex=True, figsize=(7, 5), height_ratios=[3, 1]
     )
-    fig.tight_layout(rect=(0, 0.20, 1, 1))   # reserve 20 % for footer
+    fig.tight_layout(rect=(0, 0.20, 1, 1))            # 20 % footer
+    return fig, (ax_top, ax_err)
 
-    ax_top.plot(time_s, command_body, label=f"command a{axis}")
-    ax_top.plot(time_s, actual_body,  label=f"actual  a{axis}")
-    ax_top.set_title(f"Body-frame acceleration tracking – a{axis}", pad=8)
-    ax_top.set_ylabel(f"a{axis}  [m·s⁻²]")
-    ax_top.legend(loc="upper right")
 
-    ax_err.plot(time_s, error_body, label="error", linewidth=1)
+def _plot_series_pair(
+    time: Iterable[float],
+    series: list[tuple[Iterable[float], str]],   # [(y_values, line_label), …]
+    err: Iterable[float],
+    *,
+    title: str,
+    y_label: str,
+    png_name: str,
+    outdir: Path,
+    run_info: dict[str, str],
+) -> None:
+    """Generic helper for plotting time series with error subplot."""
+    fig, (ax, ax_err) = _make_fig_with_footer()
+
+    for y, lbl in series:
+        ax.plot(time, y, label=lbl)
+    ax.set_title(title, pad=8)
+    ax.set_ylabel(y_label)
+    ax.legend(loc="upper right")
+
+    ax_err.plot(time, err, label="error", linewidth=1)
     ax_err.set_xlabel("time [s]")
     ax_err.set_ylabel("err")
     ax_err.legend(loc="upper right")
 
-
-    footer_text = _wrap_footer(
-        [
-            ("kinfer",    run_info["kinfer"]),
-            ("robot",     run_info["robot"]),
-            ("eval",      run_info["eval_name"]),
-            ("timestamp", run_info["timestamp"]),
-            ("outdir",    run_info["outdir"]),
-        ],
-        fig,
-        font_size_pt=12,
-    )
-    fig.text(
-        0.0, -0.02,
-        footer_text,
-        ha="left", va="top",
-        fontsize=12, family="monospace", linespacing=1.4,
-    )
+    _add_footer(fig, run_info)
 
     outdir.mkdir(parents=True, exist_ok=True)
-    fig.savefig(outdir / f"accel_{axis}.png", dpi=150, bbox_inches="tight")
+    fig.savefig(outdir / png_name, dpi=150, bbox_inches="tight")
     plt.close(fig)
 
 
 
-def _plot_heading_series(
-    time_s: list[float],
-    ref_yaw: list[float],
-    act_yaw: list[float],
-    err_yaw: list[float],
-    outdir: Path,
-    run_info: dict[str, str],
-) -> None:
-    """Reference vs. actual heading (rad) and the tracking error."""
-    fig, (ax_top, ax_err) = plt.subplots(
-        2, 1, sharex=True, figsize=(7, 5), height_ratios=[3, 1]
+
+def plot_velocity(time_s, cmd, act, err, axis: str, outdir: Path, info):
+    """Plot velocity tracking for a given axis."""
+    _plot_series_pair(
+        time_s,
+        [(cmd, f"command v{axis}"), (act, f"actual v{axis}")],
+        err,
+        title=f"Body-frame velocity tracking – v{axis}",
+        y_label=f"v{axis}  [m·s⁻¹]",
+        png_name=f"velocity_{axis}.png",
+        outdir=outdir,
+        run_info=info,
     )
-    fig.tight_layout(rect=(0, 0.20, 1, 1))
 
-    ax_top.plot(time_s, ref_yaw, label="reference yaw")
-    ax_top.plot(time_s, act_yaw, label="actual yaw")
-    ax_top.set_title("Heading tracking (yaw)", pad=8)
-    ax_top.set_ylabel("yaw  [rad]")
-    ax_top.legend(loc="upper right")
 
-    ax_err.plot(time_s, err_yaw, label="error", linewidth=1)
-    ax_err.set_xlabel("time [s]")
-    ax_err.set_ylabel("err")
-    ax_err.legend(loc="upper right")
-
-    footer_text = _wrap_footer(
-        [("kinfer", run_info["kinfer"]), ("robot", run_info["robot"]),
-         ("eval", run_info["eval_name"]), ("timestamp", run_info["timestamp"]),
-         ("outdir", run_info["outdir"])],
-        fig, font_size_pt=12
+def plot_accel(time_s, cmd, act, err, axis: str, outdir: Path, info):
+    """Plot acceleration tracking for a given axis."""
+    _plot_series_pair(
+        time_s,
+        [(cmd, f"command a{axis}"), (act, f"actual a{axis}")],
+        err,
+        title=f"Body-frame acceleration tracking – a{axis}",
+        y_label=f"a{axis}  [m·s⁻²]",
+        png_name=f"accel_{axis}.png",
+        outdir=outdir,
+        run_info=info,
     )
-    fig.text(0.0, -0.02, footer_text, ha="left", va="top",
-             fontsize=12, family="monospace", linespacing=1.4)
-
-    outdir.mkdir(parents=True, exist_ok=True)
-    fig.savefig(outdir / "heading_yaw.png", dpi=150, bbox_inches="tight")
-    plt.close(fig)
 
 
-def _plot_omega_series(
-    time_s: list[float],
-    cmd_omega: list[float],
-    act_omega: list[float],
-    err_omega: list[float],
-    outdir: Path,
-    run_info: dict[str, str],
-) -> None:
-    """Commanded vs. actual angular velocity (rad s⁻¹) and the error."""
-    fig, (ax_top, ax_err) = plt.subplots(
-        2, 1, sharex=True, figsize=(7, 5), height_ratios=[3, 1]
+def plot_heading(time_s, ref, act, err, outdir: Path, info):
+    """Plot heading tracking."""
+    _plot_series_pair(
+        time_s,
+        [(ref, "reference yaw"), (act, "actual yaw")],
+        err,
+        title="Heading tracking (yaw)",
+        y_label="yaw  [rad]",
+        png_name="heading_yaw.png",
+        outdir=outdir,
+        run_info=info,
     )
-    fig.tight_layout(rect=(0, 0.20, 1, 1))
 
-    ax_top.plot(time_s, cmd_omega, label="command ω")
-    ax_top.plot(time_s, act_omega, label="actual  ω")
-    ax_top.set_title("Angular-velocity tracking (ω)", pad=8)
-    ax_top.set_ylabel("ω  [rad s⁻¹]")
-    ax_top.legend(loc="upper right")
 
-    ax_err.plot(time_s, err_omega, label="error", linewidth=1)
-    ax_err.set_xlabel("time [s]")
-    ax_err.set_ylabel("err")
-    ax_err.legend(loc="upper right")
-
-    footer_text = _wrap_footer(
-        [("kinfer", run_info["kinfer"]), ("robot", run_info["robot"]),
-         ("eval", run_info["eval_name"]), ("timestamp", run_info["timestamp"]),
-         ("outdir", run_info["outdir"])],
-        fig, font_size_pt=12
+def plot_omega(time_s, cmd, act, err, outdir: Path, info):
+    """Plot angular velocity tracking."""
+    _plot_series_pair(
+        time_s,
+        [(cmd, "command ω"), (act, "actual ω")],
+        err,
+        title="Angular-velocity tracking (ω)",
+        y_label="ω  [rad s⁻¹]",
+        png_name="angular_velocity.png",
+        outdir=outdir,
+        run_info=info,
     )
-    fig.text(0.0, -0.02, footer_text, ha="left", va="top",
-             fontsize=12, family="monospace", linespacing=1.4)
-
-    outdir.mkdir(parents=True, exist_ok=True)
-    fig.savefig(outdir / "angular_velocity.png", dpi=150, bbox_inches="tight")
-    plt.close(fig)
-
 
 
 

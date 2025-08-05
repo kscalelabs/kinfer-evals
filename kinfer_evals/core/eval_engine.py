@@ -17,12 +17,12 @@ from kinfer_sim.simulator import MujocoSimulator
 
 from kinfer_evals.core.eval_types import PrecomputedInputState, RunArgs
 from kinfer_evals.core.eval_utils import get_yaw_from_quaternion, load_sim_and_runner
-from kinfer_evals.core.plots import _plot_velocity_series, _plot_xy_trajectory
-from kinfer_evals.core.plots import _plot_accel_series
 from kinfer_evals.core.plots import (
-    _plot_accel_series,
-    _plot_heading_series,
-    _plot_omega_series,
+    plot_velocity,
+    plot_accel,
+    plot_heading,
+    plot_omega,
+    _plot_xy_trajectory,
 )
 from tabulate import tabulate
 from kinfer_evals.reference_state import ReferenceStateTracker
@@ -177,25 +177,25 @@ async def run_episode(
         "outdir": run_info["output_directory"] if run_info else "",
     }
 
-    _plot_velocity_series(time_s, command_vx_body, actual_vx_body,
-                          error_vx_body, "x", outdir, run_meta)
-    _plot_velocity_series(time_s, command_vy_body, actual_vy_body,
-                          error_vy_body, "y", outdir, run_meta)
+    plot_velocity(time_s, command_vx_body, actual_vx_body,
+                  error_vx_body, "x", outdir, run_meta)
+    plot_velocity(time_s, command_vy_body, actual_vy_body,
+                  error_vy_body, "y", outdir, run_meta)
 
     _plot_xy_trajectory(ref_x, ref_y, act_x, act_y, outdir, run_meta)
 
 
-    _plot_accel_series(time_acc, command_ax_body, actual_ax_body,
-                       err_ax, "x",   outdir, run_meta)
-    _plot_accel_series(time_acc, command_ay_body, actual_ay_body,
-                       err_ay, "y",   outdir, run_meta)
-    _plot_accel_series(time_acc, cmd_am,          act_am,
-                       err_am, "mag", outdir, run_meta)
+    plot_accel(time_acc, command_ax_body, actual_ax_body,
+               err_ax, "x", outdir, run_meta)
+    plot_accel(time_acc, command_ay_body, actual_ay_body,
+               err_ay, "y", outdir, run_meta)
+    plot_accel(time_acc, cmd_am, act_am,
+               err_am, "mag", outdir, run_meta)
 
     # heading & ω plots
-    _plot_heading_series(time_s, yaw_ref_u, yaw_act_u, yaw_err, outdir, run_meta)
-    _plot_omega_series(time_omega, cmd_omega[:-1], act_omega,
-                       err_omega, outdir, run_meta)
+    plot_heading(time_s, yaw_ref_u, yaw_act_u, yaw_err, outdir, run_meta)
+    plot_omega(time_omega, cmd_omega[:-1], act_omega,
+               err_omega, outdir, run_meta)
 
 
     # Velocity errors
