@@ -25,6 +25,8 @@ from kinfer_evals.core.plots import (
 )
 from kinfer_evals.reference_state import ReferenceStateTracker
 
+from kinfer_evals.core.notion import push_summary
+
 if TYPE_CHECKING:
     from kinfer_evals.evals import CommandMaker
 
@@ -264,6 +266,12 @@ async def run_episode(
     combined: dict[str, object] = {**run_info, **summary}
     (outdir / "run_summary.json").write_text(json.dumps(combined, indent=2))
     logger.info("Saved combined summary to %s", outdir / "run_summary.json")
+
+    try:
+        url = push_summary(combined)
+        logger.info("Logged run to Notion: %s", url)
+    except Exception as exc:
+        logger.warning("Failed to push results to Notion: %s", exc)
 
     return log
 
