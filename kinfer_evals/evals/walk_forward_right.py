@@ -13,7 +13,6 @@ ramp → stop    0.5 s
 stand 3 s
 """
 
-
 from kinfer_evals.core.eval_utils import cmd, ramp
 from kinfer_evals.evals import register
 
@@ -25,7 +24,7 @@ def make_commands(freq: float) -> list[list[float]]:
     def s(t: float) -> int:
         return int(round(t * freq))  # samples helper
 
-    vx = 0.5      # forward speed  [m s⁻¹]
+    vx = 0.5  # forward speed  [m s⁻¹]
     omega = -1.5  # right-turn angular velocity  [rad s⁻¹]  (≈ 86 ° s⁻¹)
 
     # 1) stand 1 s

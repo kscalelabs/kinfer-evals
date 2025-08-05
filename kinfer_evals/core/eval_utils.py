@@ -72,4 +72,3 @@ async def load_sim_and_runner(
     provider = ModelProvider(sim, keyboard_state=cmd_factory())
     runner = PyModelRunner(str(kinfer), provider)
     return sim, runner, provider
-

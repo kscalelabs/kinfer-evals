@@ -6,24 +6,23 @@ import logging
 import time
 from datetime import datetime
 from pathlib import Path
-
 from typing import TYPE_CHECKING, Mapping, Sequence
 
 import numpy as np
 from kinfer.rust_bindings import PyModelRunner
 from kinfer_sim.provider import ModelProvider
 from kinfer_sim.simulator import MujocoSimulator
+from tabulate import tabulate
 
 from kinfer_evals.core.eval_types import PrecomputedInputState, RunArgs
 from kinfer_evals.core.eval_utils import get_yaw_from_quaternion, load_sim_and_runner
 from kinfer_evals.core.plots import (
-    plot_velocity,
+    _plot_xy_trajectory,
     plot_accel,
     plot_heading,
     plot_omega,
-    _plot_xy_trajectory,
+    plot_velocity,
 )
-from tabulate import tabulate
 from kinfer_evals.reference_state import ReferenceStateTracker
 
 if TYPE_CHECKING:
@@ -56,21 +55,21 @@ async def run_episode(
     error_vy_body: list[float] = []
 
     # yaw / ω
-    yaw_ref:  list[float] = []
-    yaw_act:  list[float] = []
+    yaw_ref: list[float] = []
+    yaw_act: list[float] = []
     cmd_omega: list[float] = []
 
     # will fill after the loop (derivatives)
     command_ax_body: list[float] = []
     command_ay_body: list[float] = []
-    actual_ax_body:  list[float] = []
-    actual_ay_body:  list[float] = []
+    actual_ax_body: list[float] = []
+    actual_ay_body: list[float] = []
 
     # XY traces
-    ref_x:  list[float] = []
-    ref_y:  list[float] = []
-    act_x:  list[float] = []
-    act_y:  list[float] = []
+    ref_x: list[float] = []
+    ref_y: list[float] = []
+    act_x: list[float] = []
+    act_y: list[float] = []
 
     quat0 = sim._data.sensor("imu_site_quat").data
     yaw0 = get_yaw_from_quaternion(quat0)
@@ -144,8 +143,8 @@ async def run_episode(
     dt = dt_ctrl
     command_ax_body = np.diff(command_vx_body) / dt
     command_ay_body = np.diff(command_vy_body) / dt
-    actual_ax_body  = np.diff(actual_vx_body)  / dt
-    actual_ay_body  = np.diff(actual_vy_body)  / dt
+    actual_ax_body = np.diff(actual_vx_body) / dt
+    actual_ay_body = np.diff(actual_vy_body) / dt
 
     # time stamps shortened by one sample
     time_acc = time_s[1:]
@@ -155,13 +154,13 @@ async def run_episode(
 
     # total (magnitude) acceleration
     cmd_am = np.sqrt(command_ax_body**2 + command_ay_body**2)
-    act_am = np.sqrt(actual_ax_body**2  + actual_ay_body**2)
+    act_am = np.sqrt(actual_ax_body**2 + actual_ay_body**2)
     err_am = act_am - cmd_am
 
     # unwrap yaw → avoid π jumps
     yaw_ref_u = np.unwrap(yaw_ref)
     yaw_act_u = np.unwrap(yaw_act)
-    yaw_err   = yaw_act_u - yaw_ref_u
+    yaw_err = yaw_act_u - yaw_ref_u
 
     act_omega = np.diff(yaw_act_u) / dt
     err_omega = act_omega - np.asarray(cmd_omega[:-1])
@@ -176,87 +175,87 @@ async def run_episode(
         "outdir": run_info["output_directory"] if run_info else "",
     }
 
-    plot_velocity(time_s, command_vx_body, actual_vx_body,
-                  error_vx_body, "x", outdir, run_meta)
-    plot_velocity(time_s, command_vy_body, actual_vy_body,
-                  error_vy_body, "y", outdir, run_meta)
+    plot_velocity(time_s, command_vx_body, actual_vx_body, error_vx_body, "x", outdir, run_meta)
+    plot_velocity(time_s, command_vy_body, actual_vy_body, error_vy_body, "y", outdir, run_meta)
 
     _plot_xy_trajectory(ref_x, ref_y, act_x, act_y, outdir, run_meta)
 
-
-    plot_accel(time_acc, command_ax_body, actual_ax_body,
-               err_ax, "x", outdir, run_meta)
-    plot_accel(time_acc, command_ay_body, actual_ay_body,
-               err_ay, "y", outdir, run_meta)
-    plot_accel(time_acc, cmd_am, act_am,
-               err_am, "mag", outdir, run_meta)
+    plot_accel(time_acc, command_ax_body, actual_ax_body, err_ax, "x", outdir, run_meta)
+    plot_accel(time_acc, command_ay_body, actual_ay_body, err_ay, "y", outdir, run_meta)
+    plot_accel(time_acc, cmd_am, act_am, err_am, "mag", outdir, run_meta)
 
     # heading & ω plots
     plot_heading(time_s, yaw_ref_u, yaw_act_u, yaw_err, outdir, run_meta)
-    plot_omega(time_omega, cmd_omega[:-1], act_omega,
-               err_omega, outdir, run_meta)
-
+    plot_omega(time_omega, cmd_omega[:-1], act_omega, err_omega, outdir, run_meta)
 
     # Velocity errors
-    mae_vx   = float(np.mean(np.abs(error_vx_body)))
-    mae_vy   = float(np.mean(np.abs(error_vy_body)))
-    rmse_vx  = float(np.sqrt(np.mean(np.square(error_vx_body))))
-    rmse_vy  = float(np.sqrt(np.mean(np.square(error_vy_body))))
+    mae_vx = float(np.mean(np.abs(error_vx_body)))
+    mae_vy = float(np.mean(np.abs(error_vy_body)))
+    rmse_vx = float(np.sqrt(np.mean(np.square(error_vx_body))))
+    rmse_vy = float(np.sqrt(np.mean(np.square(error_vy_body))))
 
     # Acceleration errors
-    mae_ax   = float(np.mean(np.abs(err_ax)))
-    mae_ay   = float(np.mean(np.abs(err_ay)))
-    mae_am   = float(np.mean(np.abs(err_am)))
-    rmse_ax  = float(np.sqrt(np.mean(np.square(err_ax))))
-    rmse_ay  = float(np.sqrt(np.mean(np.square(err_ay))))
-    rmse_am  = float(np.sqrt(np.mean(np.square(err_am))))
+    mae_ax = float(np.mean(np.abs(err_ax)))
+    mae_ay = float(np.mean(np.abs(err_ay)))
+    mae_am = float(np.mean(np.abs(err_am)))
+    rmse_ax = float(np.sqrt(np.mean(np.square(err_ax))))
+    rmse_ay = float(np.sqrt(np.mean(np.square(err_ay))))
+    rmse_am = float(np.sqrt(np.mean(np.square(err_am))))
 
     # Heading / ω errors
-    mae_yaw  = float(np.mean(np.abs(yaw_err)))
+    mae_yaw = float(np.mean(np.abs(yaw_err)))
     rmse_yaw = float(np.sqrt(np.mean(np.square(yaw_err))))
-    mae_om   = float(np.mean(np.abs(err_omega)))
-    rmse_om  = float(np.sqrt(np.mean(np.square(err_omega))))
+    mae_om = float(np.mean(np.abs(err_omega)))
+    rmse_om = float(np.sqrt(np.mean(np.square(err_omega))))
 
     # 1) velocity & acceleration (vector-axes table)
     vel_acc_table = [
-        ["metric",                                  "x-axis",          "y-axis",          "magnitude"],
-        ["mean abs velocity error  [m/s]",          f"{mae_vx:.4f}",   f"{mae_vy:.4f}",   "—"],
-        ["root mean square velocity error  [m/s]",  f"{rmse_vx:.4f}",  f"{rmse_vy:.4f}",  "—"],
-        ["mean abs acceleration error  [m/s²]",     f"{mae_ax:.4f}",   f"{mae_ay:.4f}",   f"{mae_am:.4f}"],
+        ["metric", "x-axis", "y-axis", "magnitude"],
+        ["mean abs velocity error  [m/s]", f"{mae_vx:.4f}", f"{mae_vy:.4f}", "—"],
+        ["root mean square velocity error  [m/s]", f"{rmse_vx:.4f}", f"{rmse_vy:.4f}", "—"],
+        ["mean abs acceleration error  [m/s²]", f"{mae_ax:.4f}", f"{mae_ay:.4f}", f"{mae_am:.4f}"],
         ["root mean square acceleration error [m/s²]", f"{rmse_ax:.4f}", f"{rmse_ay:.4f}", f"{rmse_am:.4f}"],
-        ["samples (velocity)",                      len(error_vx_body), len(error_vy_body), "—"],
+        ["samples (velocity)", len(error_vx_body), len(error_vy_body), "—"],
     ]
 
     # 2) heading & angular-velocity (single-value table)
     heading_table = [
-        ["metric",                                  "value"],
-        ["mean abs heading error  [rad]",           f"{mae_yaw:.4f}"],
-        ["root mean square heading error  [rad]",   f"{rmse_yaw:.4f}"],
-        ["mean abs ω error  [rad/s]",               f"{mae_om:.4f}"],
-        ["root mean square ω error  [rad/s]",       f"{rmse_om:.4f}"],
-        ["samples (ω)",                             len(err_omega)],
+        ["metric", "value"],
+        ["mean abs heading error  [rad]", f"{mae_yaw:.4f}"],
+        ["root mean square heading error  [rad]", f"{rmse_yaw:.4f}"],
+        ["mean abs ω error  [rad/s]", f"{mae_om:.4f}"],
+        ["root mean square ω error  [rad/s]", f"{rmse_om:.4f}"],
+        ["samples (ω)", len(err_omega)],
     ]
 
     logger.info(
         "\n"
         + tabulate(vel_acc_table, headers="firstrow", tablefmt="github")
         + "\n\n"
-        + tabulate(heading_table,  headers="firstrow", tablefmt="github")
+        + tabulate(heading_table, headers="firstrow", tablefmt="github")
         + "\n"
     )
 
     summary: dict[str, object] = {
         # velocity
-        "mae_vel_x": mae_vx,          "mae_vel_y": mae_vy,
-        "rmse_vel_x": rmse_vx,        "rmse_vel_y": rmse_vy,
+        "mae_vel_x": mae_vx,
+        "mae_vel_y": mae_vy,
+        "rmse_vel_x": rmse_vx,
+        "rmse_vel_y": rmse_vy,
         "vel_samples": len(error_vx_body),
         # acceleration
-        "mae_accel_x": mae_ax,        "mae_accel_y": mae_ay,  "mae_accel_mag": mae_am,
-        "rmse_accel_x": rmse_ax,      "rmse_accel_y": rmse_ay, "rmse_accel_mag": rmse_am,
+        "mae_accel_x": mae_ax,
+        "mae_accel_y": mae_ay,
+        "mae_accel_mag": mae_am,
+        "rmse_accel_x": rmse_ax,
+        "rmse_accel_y": rmse_ay,
+        "rmse_accel_mag": rmse_am,
         # heading (yaw)
-        "mae_heading": mae_yaw,       "rmse_heading": rmse_yaw,
+        "mae_heading": mae_yaw,
+        "rmse_heading": rmse_yaw,
         # angular velocity
-        "mae_omega": mae_om,          "rmse_omega": rmse_om,
+        "mae_omega": mae_om,
+        "rmse_omega": rmse_om,
         "omega_samples": len(err_omega),
     }
 

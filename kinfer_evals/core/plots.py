@@ -1,19 +1,18 @@
 """Plotting utilities."""
 
 from __future__ import annotations
+
+import textwrap
 from pathlib import Path
 from typing import Iterable
 
 import numpy as np
-import textwrap
-from matplotlib import pyplot as plt
+from matplotlib import colors, pyplot as plt
 from matplotlib.collections import LineCollection
-from matplotlib import colors
 
 
 def _wrap_footer(pairs: list[tuple[str, str]], fig, *, font_size_pt: int = 11) -> str:
-    """
-    Return a single multiline string where each pair (label, text) is rendered
+    """Return a single multiline string where each pair (label, text) is rendered
     as `label: text`, wrapped so that no line exceeds the current figure width.
 
     We approximate the number of characters that fit:
@@ -27,8 +26,7 @@ def _wrap_footer(pairs: list[tuple[str, str]], fig, *, font_size_pt: int = 11) -
     for label, text in pairs:
         prefix = f"{label}: "
         for i, chunk in enumerate(
-            textwrap.wrap(text, width=max_chars - len(prefix),
-                          break_long_words=True, break_on_hyphens=False) or [""]
+            textwrap.wrap(text, width=max_chars - len(prefix), break_long_words=True, break_on_hyphens=False) or [""]
         ):
             out.append(prefix + chunk if i == 0 else " " * len(prefix) + chunk)
     return "\n".join(out)
@@ -37,29 +35,29 @@ def _wrap_footer(pairs: list[tuple[str, str]], fig, *, font_size_pt: int = 11) -
 def _add_footer(fig, run_info: dict[str, str]) -> None:
     """Add a standardized footer with run information to the figure."""
     fig.text(
-        0.0, -0.02,
+        0.0,
+        -0.02,
         _wrap_footer(
-            [(k, run_info[k]) for k in ("kinfer", "robot", "eval_name", "timestamp", "outdir")],
-            fig, font_size_pt=12),
-        ha="left", va="top",
-        fontsize=12, family="monospace", linespacing=1.4,
+            [(k, run_info[k]) for k in ("kinfer", "robot", "eval_name", "timestamp", "outdir")], fig, font_size_pt=12
+        ),
+        ha="left",
+        va="top",
+        fontsize=12,
+        family="monospace",
+        linespacing=1.4,
     )
-
-
 
 
 def _make_fig_with_footer() -> tuple[plt.Figure, tuple[plt.Axes, plt.Axes]]:
     """Create a standardized 2-panel figure with space reserved for footer."""
-    fig, (ax_top, ax_err) = plt.subplots(
-        2, 1, sharex=True, figsize=(7, 5), height_ratios=[3, 1]
-    )
-    fig.tight_layout(rect=(0, 0.20, 1, 1))            # 20 % footer
+    fig, (ax_top, ax_err) = plt.subplots(2, 1, sharex=True, figsize=(7, 5), height_ratios=[3, 1])
+    fig.tight_layout(rect=(0, 0.20, 1, 1))  # 20 % footer
     return fig, (ax_top, ax_err)
 
 
 def _plot_series_pair(
     time: Iterable[float],
-    series: list[tuple[Iterable[float], str]],   # [(y_values, line_label), …]
+    series: list[tuple[Iterable[float], str]],  # [(y_values, line_label), …]
     err: Iterable[float],
     *,
     title: str,
@@ -87,8 +85,6 @@ def _plot_series_pair(
     outdir.mkdir(parents=True, exist_ok=True)
     fig.savefig(outdir / png_name, dpi=150, bbox_inches="tight")
     plt.close(fig)
-
-
 
 
 def plot_velocity(time_s, cmd, act, err, axis: str, outdir: Path, info):
@@ -147,7 +143,6 @@ def plot_omega(time_s, cmd, act, err, outdir: Path, info):
     )
 
 
-
 def _plot_xy_trajectory(
     ref_x: list[float],
     ref_y: list[float],
@@ -156,14 +151,13 @@ def _plot_xy_trajectory(
     outdir: Path,
     run_info: dict[str, str],
 ) -> None:
-    """
-    Save a top-down plot comparing reference vs. actual XY trajectories.
+    """Save a top-down plot comparing reference vs. actual XY trajectories.
     Reference path: green → blue, actual path: yellow → red (early → late).
     """
     # give the footer some breathing room → make the figure taller
-    fig, ax = plt.subplots(figsize=(5, 6))          # ↑ extra 1 inch
+    fig, ax = plt.subplots(figsize=(5, 6))  # ↑ extra 1 inch
     # keep 20 % of the figure's height free at the bottom
-    fig.tight_layout(rect=(0, 0.20, 1, 1))          # left, bottom, right, top
+    fig.tight_layout(rect=(0, 0.20, 1, 1))  # left, bottom, right, top
 
     def add_gradient_line(
         x: list[float],
@@ -210,21 +204,22 @@ def _plot_xy_trajectory(
     # ---------- footer ----------------------------------------------------
     footer_text = _wrap_footer(
         [
-            ("kinfer",    run_info["kinfer"]),
-            ("robot",     run_info["robot"]),
-            ("eval",      run_info["eval_name"]),
+            ("kinfer", run_info["kinfer"]),
+            ("robot", run_info["robot"]),
+            ("eval", run_info["eval_name"]),
             ("timestamp", run_info["timestamp"]),
-            ("outdir",    run_info["outdir"]),
+            ("outdir", run_info["outdir"]),
         ],
         fig,
         font_size_pt=12,
     )
     fig.text(
-        0.0, -0.02,                       # x-pos (left), y-pos just below the axes
+        0.0,
+        -0.02,  # x-pos (left), y-pos just below the axes
         footer_text,
         ha="left",
         va="top",
-        fontsize=12,                      # double-sized as requested
+        fontsize=12,  # double-sized as requested
         linespacing=1.4,
         family="monospace",
     )
