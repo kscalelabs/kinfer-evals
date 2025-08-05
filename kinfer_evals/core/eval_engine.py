@@ -30,7 +30,7 @@ async def run_episode(
     seconds: float,
     outdir: Path,
     provider: ModelProvider | None = None,
-) -> list[dict]:
+) -> list[dict[str, object]]:
     """Physics → inference → actuation loop + reference-error logging & plots."""
     tracker = ReferenceStateTracker()
 

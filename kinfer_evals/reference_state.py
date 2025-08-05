@@ -9,6 +9,7 @@ import numpy as np
 class ReferenceStateTracker:
     """Integrate body-frame (vx, vy) commands into world-frame (x, y)."""
 
+    @staticmethod
     def _make_zeros() -> np.ndarray:
         return np.zeros(2, dtype=np.float32)
 
