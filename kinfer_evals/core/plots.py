@@ -156,6 +156,85 @@ def _plot_accel_series(
 
 
 
+def _plot_heading_series(
+    time_s: list[float],
+    ref_yaw: list[float],
+    act_yaw: list[float],
+    err_yaw: list[float],
+    outdir: Path,
+    run_info: dict[str, str],
+) -> None:
+    """Reference vs. actual heading (rad) and the tracking error."""
+    fig, (ax_top, ax_err) = plt.subplots(
+        2, 1, sharex=True, figsize=(7, 5), height_ratios=[3, 1]
+    )
+    fig.tight_layout(rect=(0, 0.20, 1, 1))
+
+    ax_top.plot(time_s, ref_yaw, label="reference yaw")
+    ax_top.plot(time_s, act_yaw, label="actual yaw")
+    ax_top.set_title("Heading tracking (yaw)", pad=8)
+    ax_top.set_ylabel("yaw  [rad]")
+    ax_top.legend(loc="upper right")
+
+    ax_err.plot(time_s, err_yaw, label="error", linewidth=1)
+    ax_err.set_xlabel("time [s]")
+    ax_err.set_ylabel("err")
+    ax_err.legend(loc="upper right")
+
+    footer_text = _wrap_footer(
+        [("kinfer", run_info["kinfer"]), ("robot", run_info["robot"]),
+         ("eval", run_info["eval_name"]), ("timestamp", run_info["timestamp"]),
+         ("outdir", run_info["outdir"])],
+        fig, font_size_pt=12
+    )
+    fig.text(0.0, -0.02, footer_text, ha="left", va="top",
+             fontsize=12, family="monospace", linespacing=1.4)
+
+    outdir.mkdir(parents=True, exist_ok=True)
+    fig.savefig(outdir / "heading_yaw.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
+def _plot_omega_series(
+    time_s: list[float],
+    cmd_omega: list[float],
+    act_omega: list[float],
+    err_omega: list[float],
+    outdir: Path,
+    run_info: dict[str, str],
+) -> None:
+    """Commanded vs. actual angular velocity (rad s⁻¹) and the error."""
+    fig, (ax_top, ax_err) = plt.subplots(
+        2, 1, sharex=True, figsize=(7, 5), height_ratios=[3, 1]
+    )
+    fig.tight_layout(rect=(0, 0.20, 1, 1))
+
+    ax_top.plot(time_s, cmd_omega, label="command ω")
+    ax_top.plot(time_s, act_omega, label="actual  ω")
+    ax_top.set_title("Angular-velocity tracking (ω)", pad=8)
+    ax_top.set_ylabel("ω  [rad s⁻¹]")
+    ax_top.legend(loc="upper right")
+
+    ax_err.plot(time_s, err_omega, label="error", linewidth=1)
+    ax_err.set_xlabel("time [s]")
+    ax_err.set_ylabel("err")
+    ax_err.legend(loc="upper right")
+
+    footer_text = _wrap_footer(
+        [("kinfer", run_info["kinfer"]), ("robot", run_info["robot"]),
+         ("eval", run_info["eval_name"]), ("timestamp", run_info["timestamp"]),
+         ("outdir", run_info["outdir"])],
+        fig, font_size_pt=12
+    )
+    fig.text(0.0, -0.02, footer_text, ha="left", va="top",
+             fontsize=12, family="monospace", linespacing=1.4)
+
+    outdir.mkdir(parents=True, exist_ok=True)
+    fig.savefig(outdir / "angular_velocity.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
+
 
 def _plot_xy_trajectory(
     ref_x: list[float],

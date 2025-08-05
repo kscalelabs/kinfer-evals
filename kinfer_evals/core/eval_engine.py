@@ -19,6 +19,11 @@ from kinfer_evals.core.eval_types import PrecomputedInputState, RunArgs
 from kinfer_evals.core.eval_utils import get_yaw_from_quaternion, load_sim_and_runner
 from kinfer_evals.core.plots import _plot_velocity_series, _plot_xy_trajectory
 from kinfer_evals.core.plots import _plot_accel_series
+from kinfer_evals.core.plots import (
+    _plot_accel_series,
+    _plot_heading_series,
+    _plot_omega_series,
+)
 from tabulate import tabulate
 from kinfer_evals.reference_state import ReferenceStateTracker
 
@@ -50,6 +55,11 @@ async def run_episode(
 
     error_vx_body: list[float] = []
     error_vy_body: list[float] = []
+
+    # yaw / ω
+    yaw_ref:  list[float] = []
+    yaw_act:  list[float] = []
+    cmd_omega: list[float] = []
 
     # will fill after the loop (derivatives)
     command_ax_body: list[float] = []
@@ -115,6 +125,10 @@ async def run_episode(
             error_vx_body.append(vx_act_body - cmd_vx_body)
             error_vy_body.append(vy_act_body - cmd_vy_body)
 
+            yaw_ref.append(tracker.yaw)
+            yaw_act.append(yaw)
+            cmd_omega.append(omega_cmd)
+
             ref_x.append(tracker.pos_x)
             ref_y.append(tracker.pos_y)
             act_x.append(float(sim._data.qpos[0]))
@@ -145,6 +159,15 @@ async def run_episode(
     act_am = np.sqrt(actual_ax_body**2  + actual_ay_body**2)
     err_am = act_am - cmd_am
 
+    # unwrap yaw → avoid π jumps
+    yaw_ref_u = np.unwrap(yaw_ref)
+    yaw_act_u = np.unwrap(yaw_act)
+    yaw_err   = yaw_act_u - yaw_ref_u
+
+    act_omega = np.diff(yaw_act_u) / dt
+    err_omega = act_omega - np.asarray(cmd_omega[:-1])
+    time_omega = time_s[1:]
+
     # Produce plots
     run_meta = {
         "kinfer": run_info["kinfer_file"] if run_info else "",
@@ -169,6 +192,11 @@ async def run_episode(
     _plot_accel_series(time_acc, cmd_am,          act_am,
                        err_am, "mag", outdir, run_meta)
 
+    # heading & ω plots
+    _plot_heading_series(time_s, yaw_ref_u, yaw_act_u, yaw_err, outdir, run_meta)
+    _plot_omega_series(time_omega, cmd_omega[:-1], act_omega,
+                       err_omega, outdir, run_meta)
+
 
     # Velocity errors
     mae_vx   = float(np.mean(np.abs(error_vx_body)))
@@ -184,16 +212,39 @@ async def run_episode(
     rmse_ay  = float(np.sqrt(np.mean(np.square(err_ay))))
     rmse_am  = float(np.sqrt(np.mean(np.square(err_am))))
 
-    table = [
-        ["metric",                              "x-axis",     "y-axis",     "magnitude"],
-        ["mean abs velocity error [m/s]",       f"{mae_vx:.4f}",  f"{mae_vy:.4f}",  "—"],
-        ["root mean square velocity error [m/s]", f"{rmse_vx:.4f}", f"{rmse_vy:.4f}", "—"],
-        ["mean abs acceleration error [m/s²]",  f"{mae_ax:.4f}",  f"{mae_ay:.4f}",  f"{mae_am:.4f}"],
-        ["root mean square accel error [m/s²]", f"{rmse_ax:.4f}", f"{rmse_ay:.4f}", f"{rmse_am:.4f}"],
-        ["samples",                             len(error_vx_body), len(error_vy_body), len(err_ax)],
+    # Heading / ω errors
+    mae_yaw  = float(np.mean(np.abs(yaw_err)))
+    rmse_yaw = float(np.sqrt(np.mean(np.square(yaw_err))))
+    mae_om   = float(np.mean(np.abs(err_omega)))
+    rmse_om  = float(np.sqrt(np.mean(np.square(err_omega))))
+
+    # 1) velocity & acceleration (vector-axes table)
+    vel_acc_table = [
+        ["metric",                                  "x-axis",          "y-axis",          "magnitude"],
+        ["mean abs velocity error  [m/s]",          f"{mae_vx:.4f}",   f"{mae_vy:.4f}",   "—"],
+        ["root mean square velocity error  [m/s]",  f"{rmse_vx:.4f}",  f"{rmse_vy:.4f}",  "—"],
+        ["mean abs acceleration error  [m/s²]",     f"{mae_ax:.4f}",   f"{mae_ay:.4f}",   f"{mae_am:.4f}"],
+        ["root mean square acceleration error [m/s²]", f"{rmse_ax:.4f}", f"{rmse_ay:.4f}", f"{rmse_am:.4f}"],
+        ["samples (velocity)",                      len(error_vx_body), len(error_vy_body), "—"],
     ]
 
-    logger.info("\n" + tabulate(table, headers="firstrow", tablefmt="github") + "\n")
+    # 2) heading & angular-velocity (single-value table)
+    heading_table = [
+        ["metric",                                  "value"],
+        ["mean abs heading error  [rad]",           f"{mae_yaw:.4f}"],
+        ["root mean square heading error  [rad]",   f"{rmse_yaw:.4f}"],
+        ["mean abs ω error  [rad/s]",               f"{mae_om:.4f}"],
+        ["root mean square ω error  [rad/s]",       f"{rmse_om:.4f}"],
+        ["samples (ω)",                             len(err_omega)],
+    ]
+
+    logger.info(
+        "\n"
+        + tabulate(vel_acc_table, headers="firstrow", tablefmt="github")
+        + "\n\n"
+        + tabulate(heading_table,  headers="firstrow", tablefmt="github")
+        + "\n"
+    )
 
     return log
 
