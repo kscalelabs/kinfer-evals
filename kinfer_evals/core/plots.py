@@ -90,10 +90,10 @@ def _plot_series_pair(
 
 
 def plot_velocity(
-    time_s: list[float],
-    cmd: list[float],
-    act: list[float],
-    err: list[float],
+    time_s: Sequence[float],
+    cmd: Sequence[float],
+    act: Sequence[float],
+    err: Sequence[float],
     axis: str,
     outdir: Path,
     info: dict[str, object],
@@ -112,10 +112,10 @@ def plot_velocity(
 
 
 def plot_accel(
-    time_s: list[float],
-    cmd: list[float],
-    act: list[float],
-    err: list[float],
+    time_s: Sequence[float],
+    cmd: Sequence[float],
+    act: Sequence[float],
+    err: Sequence[float],
     axis: str,
     outdir: Path,
     info: dict[str, object],
@@ -134,7 +134,12 @@ def plot_accel(
 
 
 def plot_heading(
-    time_s: list[float], ref: list[float], act: list[float], err: list[float], outdir: Path, info: dict[str, object]
+    time_s: Sequence[float],
+    ref: Sequence[float],
+    act: Sequence[float],
+    err: Sequence[float],
+    outdir: Path,
+    info: dict[str, object],
 ) -> None:
     """Plot heading tracking."""
     _plot_series_pair(
@@ -150,7 +155,12 @@ def plot_heading(
 
 
 def plot_omega(
-    time_s: list[float], cmd: list[float], act: list[float], err: list[float], outdir: Path, info: dict[str, object]
+    time_s: Sequence[float],
+    cmd: Sequence[float],
+    act: Sequence[float],
+    err: Sequence[float],
+    outdir: Path,
+    info: dict[str, object],
 ) -> None:
     """Plot angular velocity tracking."""
     _plot_series_pair(
@@ -166,10 +176,10 @@ def plot_omega(
 
 
 def _plot_xy_trajectory(
-    ref_x: list[float],
-    ref_y: list[float],
-    act_x: list[float],
-    act_y: list[float],
+    ref_x: Sequence[float],
+    ref_y: Sequence[float],
+    act_x: Sequence[float],
+    act_y: Sequence[float],
     outdir: Path,
     run_info: dict[str, str],
 ) -> None:
@@ -183,8 +193,8 @@ def _plot_xy_trajectory(
     fig.tight_layout(rect=(0, 0.20, 1, 1))  # left, bottom, right, top
 
     def add_gradient_line(
-        x: list[float],
-        y: list[float],
+        x: Sequence[float],
+        y: Sequence[float],
         start_col: str,
         end_col: str,
         label: str,
