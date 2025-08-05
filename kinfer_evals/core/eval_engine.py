@@ -167,6 +167,7 @@ async def run_episode(
     time_omega = time_s[1:]
 
     # Produce plots
+    assert run_info is not None
     run_meta = {
         "kinfer": run_info["kinfer_file"] if run_info else "",
         "robot": run_info["robot"] if run_info else "",
@@ -185,8 +186,8 @@ async def run_episode(
     plot_accel(time_acc, cmd_am, act_am, err_am, "mag", outdir, run_meta)
 
     # heading & ω plots
-    plot_heading(time_s, yaw_ref_u, yaw_act_u, yaw_err, outdir, run_meta)
-    plot_omega(time_omega, cmd_omega[:-1], act_omega, err_omega, outdir, run_meta)
+    plot_heading(time_s, yaw_ref_u.tolist(), yaw_act_u.tolist(), yaw_err.tolist(), outdir, run_meta)
+    plot_omega(time_omega, cmd_omega[:-1], act_omega.tolist(), err_omega.tolist(), outdir, run_meta)
 
     # Velocity errors
     mae_vx = float(np.mean(np.abs(error_vx_body)))
@@ -209,7 +210,7 @@ async def run_episode(
     rmse_om = float(np.sqrt(np.mean(np.square(err_omega))))
 
     # 1) velocity & acceleration (vector-axes table)
-    vel_acc_table = [
+    vel_acc_table: list[list[object]] = [
         ["metric", "x-axis", "y-axis", "magnitude"],
         ["mean abs velocity error  [m/s]", f"{mae_vx:.4f}", f"{mae_vy:.4f}", "—"],
         ["root mean square velocity error  [m/s]", f"{rmse_vx:.4f}", f"{rmse_vy:.4f}", "—"],
@@ -219,7 +220,7 @@ async def run_episode(
     ]
 
     # 2) heading & angular-velocity (single-value table)
-    heading_table = [
+    heading_table: list[list[object]] = [
         ["metric", "value"],
         ["mean abs heading error  [rad]", f"{mae_yaw:.4f}"],
         ["root mean square heading error  [rad]", f"{rmse_yaw:.4f}"],

@@ -1,10 +1,8 @@
 """Plotting utilities."""
 
-from __future__ import annotations
-
 import textwrap
 from pathlib import Path
-from typing import Iterable
+from typing import Sequence
 
 import numpy as np
 from matplotlib import colors, pyplot as plt
@@ -34,13 +32,15 @@ def _wrap_footer(pairs: list[tuple[str, str]], fig: Figure, *, font_size_pt: int
     return "\n".join(out)
 
 
-def _add_footer(fig: Figure, run_info: dict[str, str]) -> None:
+def _add_footer(fig: Figure, run_info: dict[str, object]) -> None:
     """Add a standardized footer with run information to the figure."""
     fig.text(
         0.0,
         -0.02,
         _wrap_footer(
-            [(k, run_info[k]) for k in ("kinfer", "robot", "eval_name", "timestamp", "outdir")], fig, font_size_pt=12
+            [(k, str(run_info[k])) for k in ("kinfer", "robot", "eval_name", "timestamp", "outdir")],
+            fig,
+            font_size_pt=12,
         ),
         ha="left",
         va="top",
@@ -58,15 +58,15 @@ def _make_fig_with_footer() -> tuple[plt.Figure, tuple[plt.Axes, plt.Axes]]:
 
 
 def _plot_series_pair(
-    time: Iterable[float],
-    series: list[tuple[Iterable[float], str]],  # [(y_values, line_label), …]
-    err: Iterable[float],
+    time: Sequence[float],
+    series: Sequence[tuple[Sequence[float], str]],  # [(y_values, label), …]
+    err: Sequence[float],
     *,
     title: str,
     y_label: str,
     png_name: str,
     outdir: Path,
-    run_info: dict[str, str],
+    run_info: dict[str, object],
 ) -> None:
     """Generic helper for plotting time series with error subplot."""
     fig, (ax, ax_err) = _make_fig_with_footer()
