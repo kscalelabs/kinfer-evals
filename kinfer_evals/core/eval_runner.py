@@ -22,7 +22,7 @@ _p.add_argument("--seconds", type=float, default=5.0)
 
 
 def main() -> None:
-    colorlogging.configure(level="INFO")
+    colorlogging.configure()
 
     ns = _p.parse_args()
     make = REGISTRY[ns.eval]  # the registered function
