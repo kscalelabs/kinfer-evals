@@ -18,6 +18,7 @@ from kinfer_sim.simulator import MujocoSimulator
 from kinfer_evals.core.eval_types import PrecomputedInputState, RunArgs
 from kinfer_evals.core.eval_utils import get_yaw_from_quaternion, load_sim_and_runner
 from kinfer_evals.core.plots import _plot_velocity_series, _plot_xy_trajectory
+from kinfer_evals.core.plots import _plot_accel_series
 from kinfer_evals.reference_state import ReferenceStateTracker
 
 if TYPE_CHECKING:
@@ -48,6 +49,12 @@ async def run_episode(
 
     error_vx_body: list[float] = []
     error_vy_body: list[float] = []
+
+    # will fill after the loop (derivatives)
+    command_ax_body: list[float] = []
+    command_ay_body: list[float] = []
+    actual_ax_body:  list[float] = []
+    actual_ay_body:  list[float] = []
 
     # XY traces
     ref_x:  list[float] = []
@@ -119,6 +126,24 @@ async def run_episode(
     finally:
         await sim.close()
 
+    # Track acceleration
+    dt = dt_ctrl
+    command_ax_body = np.diff(command_vx_body) / dt
+    command_ay_body = np.diff(command_vy_body) / dt
+    actual_ax_body  = np.diff(actual_vx_body)  / dt
+    actual_ay_body  = np.diff(actual_vy_body)  / dt
+
+    # time stamps shortened by one sample
+    time_acc = time_s[1:]
+
+    err_ax = actual_ax_body - command_ax_body
+    err_ay = actual_ay_body - command_ay_body
+
+    # total (magnitude) acceleration
+    cmd_am = np.sqrt(command_ax_body**2 + command_ay_body**2)
+    act_am = np.sqrt(actual_ax_body**2  + actual_ay_body**2)
+    err_am = act_am - cmd_am
+
     # Produce plots
     run_meta = {
         "kinfer": run_info["kinfer_file"] if run_info else "",
@@ -135,7 +160,15 @@ async def run_episode(
 
     _plot_xy_trajectory(ref_x, ref_y, act_x, act_y, outdir, run_meta)
 
-    # -------- summary on stdout --------------------------------------------
+
+    _plot_accel_series(time_acc, command_ax_body, actual_ax_body,
+                       err_ax, "x",   outdir, run_meta)
+    _plot_accel_series(time_acc, command_ay_body, actual_ay_body,
+                       err_ay, "y",   outdir, run_meta)
+    _plot_accel_series(time_acc, cmd_am,          act_am,
+                       err_am, "mag", outdir, run_meta)
+
+
     mae_vx = float(np.mean(np.abs(error_vx_body)))
     mae_vy = float(np.mean(np.abs(error_vy_body)))
     rmse_vx = float(np.sqrt(np.mean(np.square(error_vx_body))))

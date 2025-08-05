@@ -102,6 +102,61 @@ def _plot_velocity_series(
 
 
 
+def _plot_accel_series(
+    time_s: list[float],
+    command_body: list[float],
+    actual_body: list[float],
+    error_body: list[float],
+    axis: str,
+    outdir: Path,
+    run_info: dict[str, str],
+) -> None:
+    """
+    Plot commanded-vs-actual body-frame acceleration (m s⁻²) and the error
+    for a single axis *axis* ∈ {'x', 'y', 'mag'}.
+    """
+    fig, (ax_top, ax_err) = plt.subplots(
+        2, 1, sharex=True, figsize=(7, 5), height_ratios=[3, 1]
+    )
+    fig.tight_layout(rect=(0, 0.20, 1, 1))   # reserve 20 % for footer
+
+    ax_top.plot(time_s, command_body, label=f"command a{axis}")
+    ax_top.plot(time_s, actual_body,  label=f"actual  a{axis}")
+    ax_top.set_title(f"Body-frame acceleration tracking – a{axis}", pad=8)
+    ax_top.set_ylabel(f"a{axis}  [m·s⁻²]")
+    ax_top.legend(loc="upper right")
+
+    ax_err.plot(time_s, error_body, label="error", linewidth=1)
+    ax_err.set_xlabel("time [s]")
+    ax_err.set_ylabel("err")
+    ax_err.legend(loc="upper right")
+
+
+    footer_text = _wrap_footer(
+        [
+            ("kinfer",    run_info["kinfer"]),
+            ("robot",     run_info["robot"]),
+            ("eval",      run_info["eval_name"]),
+            ("timestamp", run_info["timestamp"]),
+            ("outdir",    run_info["outdir"]),
+        ],
+        fig,
+        font_size_pt=12,
+    )
+    fig.text(
+        0.0, -0.02,
+        footer_text,
+        ha="left", va="top",
+        fontsize=12, family="monospace", linespacing=1.4,
+    )
+
+    outdir.mkdir(parents=True, exist_ok=True)
+    fig.savefig(outdir / f"accel_{axis}.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
+
+
 def _plot_xy_trajectory(
     ref_x: list[float],
     ref_y: list[float],
