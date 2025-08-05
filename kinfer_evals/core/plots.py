@@ -7,15 +7,42 @@ import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.collections import LineCollection
 from matplotlib import colors
-import textwrap                      # ← NEW
+import textwrap
 
 
-def wrap(label: str, content: str, width: int = 40) -> str:
-    """Wrap long content with proper indentation for footer lines."""
-    pad = " " * (len(label) + 2)            # keep later lines aligned
-    first, *rest = textwrap.fill(content, width=width,
-                                 subsequent_indent=pad).splitlines()
-    return f"{label}: {first}" + ("\n" + "\n".join(rest) if rest else "")
+
+def _wrap_footer(pairs: list[tuple[str, str]], fig, font_size_pt: int = 11) -> str:
+    """
+    Return a single multiline string where each pair (label, text) is rendered
+    as `label: text`, wrapped so that no line exceeds the current figure width.
+
+    We approximate the number of characters that fit:
+        usable_px ≈ fig_width_inch * dpi  ·  0.96   (leave a tiny margin)
+        char_px   ≈ 0.6 · font_size_pt    (empirical for most sans-serif fonts)
+    """
+    fig_w_px = fig.get_size_inches()[0] * fig.dpi * 0.66
+    max_chars = max(20, int(fig_w_px / (0.6 * font_size_pt)))
+
+    wrapped_lines: list[str] = []
+    for label, text in pairs:
+        prefix = f"{label}: "
+        # wrap text so *content* fits; subtract prefix length
+        # (break_long_words=True lets us split a long path with no spaces)
+        chunks = textwrap.wrap(
+            text,
+            width=max_chars - len(prefix),
+            break_long_words=True,
+            break_on_hyphens=False,
+        )
+        if not chunks:                           # empty string -> still print label
+            wrapped_lines.append(prefix.rstrip())
+            continue
+        wrapped_lines.append(prefix + chunks[0])
+        pad = " " * len(prefix)
+        for chunk in chunks[1:]:
+            wrapped_lines.append(pad + chunk)
+
+    return "\n".join(wrapped_lines)
 
 
 def _plot_velocity_series(
@@ -50,18 +77,22 @@ def _plot_velocity_series(
     ax_err.legend(loc="upper right")
 
     # ---------- footer ----------------------------------------------------
-    footer_lines = [
-        wrap("kinfer",   run_info["kinfer"]),
-        wrap("robot",    run_info["robot"]),
-        wrap("eval",     run_info["eval_name"]),
-        wrap("timestamp",run_info["timestamp"]),
-        wrap("outdir",   run_info["outdir"]),
-    ]
+    footer_text = _wrap_footer(
+        [
+            ("kinfer",    run_info["kinfer"]),
+            ("robot",     run_info["robot"]),
+            ("eval",      run_info["eval_name"]),
+            ("timestamp", run_info["timestamp"]),
+            ("outdir",    run_info["outdir"]),
+        ],
+        fig,
+        font_size_pt=12,
+    )
     fig.text(
         0.0, -0.02,
-        "\n".join(footer_lines),
+        footer_text,
         ha="left", va="top",
-        fontsize=14, family="monospace", linespacing=1.4,
+        fontsize=12, family="monospace", linespacing=1.4,
     )
 
     outdir.mkdir(parents=True, exist_ok=True)
@@ -131,20 +162,23 @@ def _plot_xy_trajectory(
     ax.legend(loc="best")
 
     # ---------- footer ----------------------------------------------------
-    footer_lines = [
-        wrap("kinfer",   run_info["kinfer"]),
-        wrap("robot",    run_info["robot"]),
-        wrap("eval",     run_info["eval_name"]),
-        wrap("timestamp",run_info["timestamp"]),
-        wrap("outdir",   run_info["outdir"]),
-    ]
-    footer_text = "\n".join(footer_lines)
+    footer_text = _wrap_footer(
+        [
+            ("kinfer",    run_info["kinfer"]),
+            ("robot",     run_info["robot"]),
+            ("eval",      run_info["eval_name"]),
+            ("timestamp", run_info["timestamp"]),
+            ("outdir",    run_info["outdir"]),
+        ],
+        fig,
+        font_size_pt=12,
+    )
     fig.text(
         0.0, -0.02,                       # x-pos (left), y-pos just below the axes
         footer_text,
         ha="left",
         va="top",
-        fontsize=14,                      # double-sized as requested
+        fontsize=12,                      # double-sized as requested
         linespacing=1.4,
         family="monospace",
     )
