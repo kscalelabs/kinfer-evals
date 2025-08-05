@@ -17,7 +17,7 @@ from kinfer_evals.core.eval_utils import cmd, ramp
 from kinfer_evals.evals import register
 
 
-def make_commands(freq: float, _seconds: float):
+def make_commands(freq: float, _seconds: float) -> list[list[float]]:
     """Walk-around command script with 1 s yaw transition + 1 s hold."""
     seq = []
 

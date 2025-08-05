@@ -140,7 +140,8 @@ async def run_eval(
     eval_name: str,
     args: RunArgs,
 ) -> None:
-    """Common driver used by *every* eval:
+    """Common driver used by every eval.
+
     • spin up sim/runner with a dummy keyboard state
     • build the full command list upfront
     • wrap it in PrecomputedInputState

@@ -1,4 +1,7 @@
-"""CLI driver:  kinfer-eval  <policy>  <robot>  <eval-name>  [--seconds] [--out]"""
+"""Entry point for running evals.
+
+CLI driver:  kinfer-eval  <policy>  <robot>  <eval-name>  [--seconds] [--out]
+"""
 
 import argparse
 import asyncio
