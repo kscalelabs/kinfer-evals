@@ -59,12 +59,6 @@ async def run_episode(
     yaw_act: list[float] = []
     cmd_omega: list[float] = []
 
-    # will fill after the loop (derivatives)
-    command_ax_body: list[float] = []
-    command_ay_body: list[float] = []
-    actual_ax_body: list[float] = []
-    actual_ay_body: list[float] = []
-
     # XY traces
     ref_x: list[float] = []
     ref_y: list[float] = []

@@ -227,11 +227,11 @@ def _plot_xy_trajectory(
     # ---------- footer ----------------------------------------------------
     footer_text = _wrap_footer(
         [
-            ("kinfer", run_info["kinfer"]),
-            ("robot", run_info["robot"]),
-            ("eval", run_info["eval_name"]),
-            ("timestamp", run_info["timestamp"]),
-            ("outdir", run_info["outdir"]),
+            ("kinfer", str(run_info["kinfer"])),
+            ("robot", str(run_info["robot"])),
+            ("eval", str(run_info["eval_name"])),
+            ("timestamp", str(run_info["timestamp"])),
+            ("outdir", str(run_info["outdir"])),
         ],
         fig,
         font_size_pt=12,
