@@ -1,6 +1,6 @@
 """Reference-state utilities."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -10,12 +10,9 @@ class ReferenceStateTracker:
     """Integrate body-frame (vx, vy) commands into world-frame (x, y),
     while keeping our own reference heading."""
 
-    @staticmethod
-    def _make_zeros() -> np.ndarray:
-        return np.zeros(2, dtype=np.float32)
-
-    pos: np.ndarray = field(default_factory=_make_zeros)
-    yaw: float = 0.0
+    pos_x: float = 0.0     # world-frame x-position [m]
+    pos_y: float = 0.0     # world-frame y-position [m]
+    yaw: float = 0.0       # reference heading [rad]
 
     def reset(
         self,
@@ -23,7 +20,10 @@ class ReferenceStateTracker:
         yaw: float = 0.0,
     ) -> None:
         """Re-initialise the reference state."""
-        self.pos[:] = origin_xy if origin_xy is not None else (0.0, 0.0)
+        if origin_xy is not None:
+            self.pos_x, self.pos_y = map(float, origin_xy)
+        else:
+            self.pos_x = self.pos_y = 0.0
         self.yaw = float(yaw)
 
     def step(
@@ -43,4 +43,5 @@ class ReferenceStateTracker:
         vx_w = c * vx_b - s * vy_b
         vy_w = s * vx_b + c * vy_b
 
-        self.pos += np.array([vx_w, vy_w], dtype=np.float32) * dt
+        self.pos_x += vx_w * dt
+        self.pos_y += vy_w * dt

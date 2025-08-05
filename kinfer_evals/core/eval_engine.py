@@ -105,8 +105,8 @@ async def run_episode(
             error_vx_body.append(vx_act_body - cmd_vx_body)
             error_vy_body.append(vy_act_body - cmd_vy_body)
 
-            ref_x.append(float(tracker.pos[0]))
-            ref_y.append(float(tracker.pos[1]))
+            ref_x.append(tracker.pos_x)
+            ref_y.append(tracker.pos_y)
             act_x.append(float(sim._data.qpos[0]))
             act_y.append(float(sim._data.qpos[1]))
 
