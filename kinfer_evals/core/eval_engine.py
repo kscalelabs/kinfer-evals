@@ -224,43 +224,9 @@ def save_json(log: Sequence[dict], out: Path, fname: str = "log.json") -> None:
     (out / fname).write_text(json.dumps(log, indent=2))
 
 
-async def run_factory(
-    args: RunArgs,
-    cmd_factory: Callable[[], InputState],
-    make_commands: Callable[[float], list[list[float]]] | None = None,
-) -> None:
-    """
-    Spin up the sim/runner, optionally precompute a command list, and
-    execute `run_episode`.  Used by every eval.
-
-    Args:
-        args: common parsed arguments (kinfer, robot, out, seconds, …).
-        cmd_factory: 0-arg callable that returns a *stateful* InputState.
-        make_commands: if provided, we run the sim once to learn control
-            frequency, build the command list *before* the episode starts,
-            and replace the provider’s keyboard_state with a PrecomputedInputState.
-    """
-    sim, runner, provider = await load_sim_and_runner(
-        args.kinfer,
-        args.robot,
-        cmd_factory=cmd_factory,
-    )
-
-    # Pre-compute commands if requested
-    if make_commands is not None:
-        freq = sim._control_frequency
-        commands = make_commands(freq)
-        provider.keyboard_state = PrecomputedInputState(commands)      # type: ignore[attr-defined]
-        args.seconds = len(commands) / freq
-
-    outdir = args.out / time.strftime("%Y%m%d-%H%M%S")
-    log = await run_episode(sim, runner, args.seconds, outdir, provider)
-    save_json(log, outdir, f"{args.eval_name}_log.json")
-
-
-async def run_episode_from_fn(
+async def run_eval(
     make_cmds: "CommandMaker",
-    run_name: str,
+    eval_name: str,
     args: RunArgs,
 ) -> None:
     """
@@ -281,9 +247,9 @@ async def run_episode_from_fn(
     provider.keyboard_state = PrecomputedInputState(commands)
     args.seconds = len(commands) / freq
 
-    outdir = args.out / run_name
+    outdir = args.out / eval_name
     log = await run_episode(sim, runner, args.seconds, outdir, provider)
-    save_json(log, outdir, f"{run_name}_log.json")
+    save_json(log, outdir, f"{eval_name}_log.json")
 
 
 class PrecomputedInputState(InputState):

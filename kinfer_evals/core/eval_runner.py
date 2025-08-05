@@ -7,7 +7,7 @@ from pathlib import Path
 
 from kinfer_evals.evals import REGISTRY
 from kinfer_evals.core.types import RunArgs
-from kinfer_evals.core.eval_engine import run_episode_from_fn
+from kinfer_evals.core.eval_engine import run_eval
 
 _p = argparse.ArgumentParser(prog="kinfer-eval")
 _p.add_argument("kinfer", type=Path)
@@ -22,7 +22,7 @@ def main() -> None:
     ns   = _p.parse_args()
     make = REGISTRY[ns.eval]          # the registered function
     args = RunArgs(ns.eval, ns.kinfer, ns.robot, ns.out, ns.seconds)
-    asyncio.run(run_episode_from_fn(make, ns.eval, args))
+    asyncio.run(run_eval(make, ns.eval, args))
 
 if __name__ == "__main__":
     main()
