@@ -9,11 +9,13 @@ from typing import Iterable
 import numpy as np
 from matplotlib import colors, pyplot as plt
 from matplotlib.collections import LineCollection
+from matplotlib.figure import Figure
 
 
-def _wrap_footer(pairs: list[tuple[str, str]], fig, *, font_size_pt: int = 11) -> str:
-    """Return a single multiline string where each pair (label, text) is rendered
-    as `label: text`, wrapped so that no line exceeds the current figure width.
+def _wrap_footer(pairs: list[tuple[str, str]], fig: Figure, *, font_size_pt: int = 11) -> str:
+    """Return a single multiline string where each pair (label, text) is rendered as `label: text`.
+
+    Wrapped so that no line exceeds the current figure width.
 
     We approximate the number of characters that fit:
         usable_px ≈ fig_width_inch * dpi  ·  0.66   (leave a tiny margin)
@@ -32,7 +34,7 @@ def _wrap_footer(pairs: list[tuple[str, str]], fig, *, font_size_pt: int = 11) -
     return "\n".join(out)
 
 
-def _add_footer(fig, run_info: dict[str, str]) -> None:
+def _add_footer(fig: Figure, run_info: dict[str, str]) -> None:
     """Add a standardized footer with run information to the figure."""
     fig.text(
         0.0,
@@ -87,7 +89,15 @@ def _plot_series_pair(
     plt.close(fig)
 
 
-def plot_velocity(time_s, cmd, act, err, axis: str, outdir: Path, info):
+def plot_velocity(
+    time_s: list[float],
+    cmd: list[float],
+    act: list[float],
+    err: list[float],
+    axis: str,
+    outdir: Path,
+    info: dict[str, object],
+) -> None:
     """Plot velocity tracking for a given axis."""
     _plot_series_pair(
         time_s,
@@ -101,7 +111,15 @@ def plot_velocity(time_s, cmd, act, err, axis: str, outdir: Path, info):
     )
 
 
-def plot_accel(time_s, cmd, act, err, axis: str, outdir: Path, info):
+def plot_accel(
+    time_s: list[float],
+    cmd: list[float],
+    act: list[float],
+    err: list[float],
+    axis: str,
+    outdir: Path,
+    info: dict[str, object],
+) -> None:
     """Plot acceleration tracking for a given axis."""
     _plot_series_pair(
         time_s,
@@ -115,7 +133,9 @@ def plot_accel(time_s, cmd, act, err, axis: str, outdir: Path, info):
     )
 
 
-def plot_heading(time_s, ref, act, err, outdir: Path, info):
+def plot_heading(
+    time_s: list[float], ref: list[float], act: list[float], err: list[float], outdir: Path, info: dict[str, object]
+) -> None:
     """Plot heading tracking."""
     _plot_series_pair(
         time_s,
@@ -129,7 +149,9 @@ def plot_heading(time_s, ref, act, err, outdir: Path, info):
     )
 
 
-def plot_omega(time_s, cmd, act, err, outdir: Path, info):
+def plot_omega(
+    time_s: list[float], cmd: list[float], act: list[float], err: list[float], outdir: Path, info: dict[str, object]
+) -> None:
     """Plot angular velocity tracking."""
     _plot_series_pair(
         time_s,
@@ -152,6 +174,7 @@ def _plot_xy_trajectory(
     run_info: dict[str, str],
 ) -> None:
     """Save a top-down plot comparing reference vs. actual XY trajectories.
+
     Reference path: green → blue, actual path: yellow → red (early → late).
     """
     # give the footer some breathing room → make the figure taller

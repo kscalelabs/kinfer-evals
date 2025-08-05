@@ -7,8 +7,9 @@ import numpy as np
 
 @dataclass
 class ReferenceStateTracker:
-    """Integrate body-frame (vx, vy) commands into world-frame (x, y),
-    while keeping our own reference heading.
+    """Integrate body-frame (vx, vy) commands into world-frame (x, y).
+
+    While keeping our own reference heading.
     """
 
     pos_x: float = 0.0  # world-frame x-position [m]

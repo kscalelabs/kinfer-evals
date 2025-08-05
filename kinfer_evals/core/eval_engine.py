@@ -229,11 +229,9 @@ async def run_episode(
     ]
 
     logger.info(
-        "\n"
-        + tabulate(vel_acc_table, headers="firstrow", tablefmt="github")
-        + "\n\n"
-        + tabulate(heading_table, headers="firstrow", tablefmt="github")
-        + "\n"
+        "\n%s\n\n%s\n",
+        tabulate(vel_acc_table, headers="firstrow", tablefmt="github"),
+        tabulate(heading_table, headers="firstrow", tablefmt="github"),
     )
 
     summary: dict[str, object] = {
