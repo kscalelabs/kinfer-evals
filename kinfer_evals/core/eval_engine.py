@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import time
+from datetime import datetime
 from pathlib import Path
 
 # Import CommandMaker type (avoiding circular import)
@@ -77,7 +78,7 @@ async def run_episode(
             yaw = get_yaw_from_quaternion(quat)
             tracker.step((cmd_vx_body, cmd_vy_body), dt_ctrl, heading_rad=yaw)
 
-            # ----- convert simulator's world-frame base velocity → body frame -----
+            # Convert velocity from world frame to body frame
             vx_world = float(sim._data.qvel[0])
             vy_world = float(sim._data.qvel[1])
 
@@ -85,7 +86,7 @@ async def run_episode(
             vx_act_body = cos_yaw * vx_world + sin_yaw * vy_world
             vy_act_body = -sin_yaw * vx_world + cos_yaw * vy_world
 
-            # ----- store metrics in body frame ------------------------------------
+            # Store metrics in body frame
             time_s.append(len(time_s) * dt_ctrl)
 
             command_vx_body.append(cmd_vx_body)
@@ -133,6 +134,23 @@ async def run_episode(
 def save_json(log: Sequence[Mapping[str, object]], out: Path, fname: str = "log.json") -> None:
     out.mkdir(parents=True, exist_ok=True)
     (out / fname).write_text(json.dumps(log, indent=2))
+    logger.info("Saved log to %s", out / fname)
+
+
+def save_run_info(args: RunArgs, timestamp: str, outdir: Path, duration_seconds: float) -> None:
+    """Save metadata about this run for tracking purposes."""
+    run_info = {
+        "timestamp": timestamp,
+        "eval_name": args.eval_name,
+        "kinfer_file": str(args.kinfer.absolute()),
+        "robot": args.robot,
+        "duration_seconds": duration_seconds,
+        "output_directory": str(outdir.absolute()),
+    }
+
+    outdir.mkdir(parents=True, exist_ok=True)
+    (outdir / "run_info.json").write_text(json.dumps(run_info, indent=2))
+    logger.info("Saved run info to %s", outdir / "run_info.json")
 
 
 async def run_eval(
@@ -154,10 +172,16 @@ async def run_eval(
     )
 
     freq = sim._control_frequency
-    commands = make_cmds(freq, args.seconds)
+    commands = make_cmds(freq)
     provider.keyboard_state = PrecomputedInputState(commands)
-    args.seconds = len(commands) / freq
+    duration_seconds = len(commands) / freq
 
-    outdir = args.out / eval_name
-    log = await run_episode(sim, runner, args.seconds, outdir, provider)
+    # Create timestamped subdirectory for this run
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    outdir = args.out / eval_name / timestamp
+
+    # Save run metadata
+    save_run_info(args, timestamp, outdir, duration_seconds)
+
+    log = await run_episode(sim, runner, duration_seconds, outdir, provider)
     save_json(log, outdir, f"{eval_name}_log.json")

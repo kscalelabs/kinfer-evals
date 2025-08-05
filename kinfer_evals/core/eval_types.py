@@ -13,7 +13,6 @@ class RunArgs:
     kinfer: Path
     robot: str
     out: Path
-    seconds: float
 
 
 class CommandFactory(Protocol):

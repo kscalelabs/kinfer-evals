@@ -18,7 +18,6 @@ _p.add_argument("kinfer", type=Path)
 _p.add_argument("robot")
 _p.add_argument("eval", choices=sorted(REGISTRY.keys()))
 _p.add_argument("--out", type=Path, default=Path("runs"))
-_p.add_argument("--seconds", type=float, default=5.0)
 
 
 def main() -> None:
@@ -26,7 +25,7 @@ def main() -> None:
 
     ns = _p.parse_args()
     make = REGISTRY[ns.eval]  # the registered function
-    args = RunArgs(ns.eval, ns.kinfer, ns.robot, ns.out, ns.seconds)
+    args = RunArgs(ns.eval, ns.kinfer, ns.robot, ns.out)
     asyncio.run(run_eval(make, ns.eval, args))
 
 

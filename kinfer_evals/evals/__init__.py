@@ -2,7 +2,7 @@
 
 from typing import Callable, Dict, List
 
-CommandMaker = Callable[[float, float], List[List[float]]]  # (freq, seconds)
+CommandMaker = Callable[[float], List[List[float]]]  # (freq only)
 REGISTRY: Dict[str, CommandMaker] = {}
 
 

@@ -4,7 +4,7 @@ from kinfer_evals.core.eval_utils import cmd
 from kinfer_evals.evals import register
 
 
-def make_commands(freq: float, _seconds: float) -> list[list[float]]:
+def make_commands(freq: float) -> list[list[float]]:
     """1 s stand → 0.5 s ramp-up → 5 s walk → 0.5 s ramp-down → 1 s stand."""
 
     def s(t: float) -> int:
