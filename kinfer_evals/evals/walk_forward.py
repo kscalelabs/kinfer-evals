@@ -3,6 +3,7 @@
 from kinfer_evals.core.eval_utils import cmd
 from kinfer_evals.evals import register
 
+
 def make_commands(freq: float, _seconds: float):
     """1 s stand → 0.5 s ramp-up → 5 s walk → 0.5 s ramp-down → 1 s stand."""
     s = lambda t: int(round(t * freq))
@@ -26,5 +27,6 @@ def make_commands(freq: float, _seconds: float):
     seq += [cmd(0.0)] * s(1.0)
 
     return seq
+
 
 register("walk_forward", make_commands)

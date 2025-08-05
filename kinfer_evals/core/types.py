@@ -4,6 +4,7 @@ from typing import Protocol
 
 from kinfer_sim.provider import InputState
 
+
 @dataclass
 class RunArgs:
     eval_name: str
@@ -17,8 +18,8 @@ class CommandFactory(Protocol):
     """Anything that returns an InputState-compatible object."""
 
     def __call__(self) -> InputState: ...
-    
-    
+
+
 class PrecomputedInputState(InputState):
     """InputState that walks through a pre-computed command list."""
 

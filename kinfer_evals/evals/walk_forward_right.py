@@ -16,6 +16,7 @@ stand 3 s
 from kinfer_evals.core.eval_utils import cmd, ramp
 from kinfer_evals.evals import register
 
+
 def make_commands(freq: float, _seconds: float):
     """Walk-around command script with 1 s yaw transition + 1 s hold."""
     seq = []
@@ -57,5 +58,6 @@ def make_commands(freq: float, _seconds: float):
     seq += [cmd(yaw=yaw)] * s(3.0)
 
     return seq
+
 
 register("walk_forward_right", make_commands)

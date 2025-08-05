@@ -5,33 +5,23 @@ import json
 import logging
 import time
 from pathlib import Path
-from typing import Callable, Protocol, Sequence
+
+# Import CommandMaker type (avoiding circular import)
+from typing import TYPE_CHECKING, Sequence
 
 import numpy as np
 from kinfer.rust_bindings import PyModelRunner
-from kinfer_sim.provider import InputState, ModelProvider
-from kinfer_sim.server import find_mjcf, get_model_metadata
+from kinfer_sim.provider import ModelProvider
 from kinfer_sim.simulator import MujocoSimulator
-from kscale import K
-from kscale.web.gen.api import RobotURDFMetadataOutput
-from matplotlib import pyplot as plt
 
-from kinfer_evals.core.types import RunArgs, PrecomputedInputState
-from kinfer_evals.core.eval_utils import get_yaw_from_quaternion, _plot_velocity_series, load_sim_and_runner
+from kinfer_evals.core.eval_utils import _plot_velocity_series, get_yaw_from_quaternion, load_sim_and_runner
+from kinfer_evals.core.types import PrecomputedInputState, RunArgs
 from kinfer_evals.reference_state import ReferenceStateTracker
 
-# Import CommandMaker type (avoiding circular import)
-from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from kinfer_evals.evals import CommandMaker
 
 logger = logging.getLogger(__name__)
-
-
-
-
-
-
 
 
 async def run_episode(
@@ -150,12 +140,11 @@ async def run_eval(
     eval_name: str,
     args: RunArgs,
 ) -> None:
-    """
-    Common driver used by *every* eval:
-      • spin up sim/runner with a dummy keyboard state
-      • build the full command list upfront
-      • wrap it in PrecomputedInputState
-      • run the episode & save artefacts
+    """Common driver used by *every* eval:
+    • spin up sim/runner with a dummy keyboard state
+    • build the full command list upfront
+    • wrap it in PrecomputedInputState
+    • run the episode & save artefacts
     """
     sim, runner, provider = await load_sim_and_runner(
         args.kinfer,
@@ -171,8 +160,3 @@ async def run_eval(
     outdir = args.out / eval_name
     log = await run_episode(sim, runner, args.seconds, outdir, provider)
     save_json(log, outdir, f"{eval_name}_log.json")
-
-
-
-
-
