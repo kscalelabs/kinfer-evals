@@ -175,13 +175,21 @@ async def run_episode(
 
     _plot_xy_trajectory(ref_x, ref_y, act_x, act_y, outdir, run_meta)
 
-    plot_accel(time_acc, command_ax_body, actual_ax_body, err_ax, "x", outdir, run_meta)
-    plot_accel(time_acc, command_ay_body, actual_ay_body, err_ay, "y", outdir, run_meta)
-    plot_accel(time_acc, cmd_am, act_am, err_am, "mag", outdir, run_meta)
+    cmd_ax_l, cmd_ay_l = command_ax_body.tolist(), command_ay_body.tolist()
+    act_ax_l, act_ay_l = actual_ax_body.tolist(), actual_ay_body.tolist()
+    err_ax_l, err_ay_l = err_ax.tolist(), err_ay.tolist()
+    cmd_am_l, act_am_l, err_am_l = cmd_am.tolist(), act_am.tolist(), err_am.tolist()
+
+    plot_accel(time_acc, cmd_ax_l, act_ax_l, err_ax_l, "x", outdir, run_meta)
+    plot_accel(time_acc, cmd_ay_l, act_ay_l, err_ay_l, "y", outdir, run_meta)
+    plot_accel(time_acc, cmd_am_l, act_am_l, err_am_l, "mag", outdir, run_meta)
 
     # heading & ω plots
-    plot_heading(time_s, yaw_ref_u.tolist(), yaw_act_u.tolist(), yaw_err.tolist(), outdir, run_meta)
-    plot_omega(time_omega, cmd_omega[:-1], act_omega.tolist(), err_omega.tolist(), outdir, run_meta)
+    yaw_ref_l, yaw_act_l, yaw_err_l = yaw_ref_u.tolist(), yaw_act_u.tolist(), yaw_err.tolist()
+    act_omega_l, err_omega_l = act_omega.tolist(), err_omega.tolist()
+
+    plot_heading(time_s, yaw_ref_l, yaw_act_l, yaw_err_l, outdir, run_meta)
+    plot_omega(time_omega, cmd_omega[:-1], act_omega_l, err_omega_l, outdir, run_meta)
 
     # Velocity errors
     mae_vx = float(np.mean(np.abs(error_vx_body)))
