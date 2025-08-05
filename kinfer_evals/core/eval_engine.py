@@ -19,6 +19,7 @@ from kinfer_evals.core.eval_types import PrecomputedInputState, RunArgs
 from kinfer_evals.core.eval_utils import get_yaw_from_quaternion, load_sim_and_runner
 from kinfer_evals.core.plots import _plot_velocity_series, _plot_xy_trajectory
 from kinfer_evals.core.plots import _plot_accel_series
+from tabulate import tabulate
 from kinfer_evals.reference_state import ReferenceStateTracker
 
 if TYPE_CHECKING:
@@ -183,20 +184,16 @@ async def run_episode(
     rmse_ay  = float(np.sqrt(np.mean(np.square(err_ay))))
     rmse_am  = float(np.sqrt(np.mean(np.square(err_am))))
 
-    logger.info(
-        "\n================  Tracking summary  ================\n"
-        "Velocity – mean absolute error   vx: %.4f m/s   vy: %.4f m/s\n"
-        "Velocity – root mean square err  vx: %.4f m/s   vy: %.4f m/s\n"
-        "Acceleration – mean absolute err ax: %.4f m/s²  ay: %.4f m/s²  |a|: %.4f m/s²\n"
-        "Acceleration – root mean square  ax: %.4f m/s²  ay: %.4f m/s²  |a|: %.4f m/s²\n"
-        "Samples (velocity): %d    Samples (acceleration): %d\n"
-        "====================================================\n",
-        mae_vx, mae_vy,
-        rmse_vx, rmse_vy,
-        mae_ax, mae_ay, mae_am,
-        rmse_ax, rmse_ay, rmse_am,
-        len(error_vx_body), len(err_ax),
-    )
+    table = [
+        ["metric",                              "x-axis",     "y-axis",     "magnitude"],
+        ["mean abs velocity error [m/s]",       f"{mae_vx:.4f}",  f"{mae_vy:.4f}",  "—"],
+        ["root mean square velocity error [m/s]", f"{rmse_vx:.4f}", f"{rmse_vy:.4f}", "—"],
+        ["mean abs acceleration error [m/s²]",  f"{mae_ax:.4f}",  f"{mae_ay:.4f}",  f"{mae_am:.4f}"],
+        ["root mean square accel error [m/s²]", f"{rmse_ax:.4f}", f"{rmse_ay:.4f}", f"{rmse_am:.4f}"],
+        ["samples",                             len(error_vx_body), len(error_vy_body), len(err_ax)],
+    ]
+
+    logger.info("\n" + tabulate(table, headers="firstrow", tablefmt="github") + "\n")
 
     return log
 
