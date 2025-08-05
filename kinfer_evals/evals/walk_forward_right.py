@@ -13,86 +13,54 @@ ramp → stop    0.5 s
 stand 3 s
 """
 
-import argparse
-import asyncio
-import time
-from pathlib import Path
-
-import colorlogging
-
-from kinfer_evals.evals.common import PrecomputedInputState, cmd, load_sim_and_runner, ramp, run_episode, save_json
+from kinfer_evals.core.eval_utils import cmd, ramp
+from kinfer_evals.evals import register
 
 
-def make_commands(freq_hz: float) -> list[list[float]]:
-    """Walk-around command script with 1 s yaw transition + 1 s hold."""
-    seq: list[list[float]] = []
+def make_commands(freq: float) -> list[list[float]]:
+    """Return the full command list for this manoeuvre."""
+    seq = []
 
     def s(t: float) -> int:
-        return int(round(t * freq_hz))  # samples helper
+        return int(round(t * freq))  # samples helper
 
-    vx = 0.5  # forward speed (m/s)
-    yaw = -1.5  # turn-right heading (rad)
+    vx = 0.5  # forward speed  [m s⁻¹]
+    omega = -1.5  # right-turn angular velocity  [rad s⁻¹]  (≈ 86 ° s⁻¹)
 
     # 1) stand 1 s
     seq += [cmd()] * s(1.0)
 
     # 2) ramp fwd 0 → VX in 0.5 s
-    seq += [cmd(v) for v in ramp(0.0, vx, 0.5, freq_hz)]
+    seq += [cmd(v) for v in ramp(0.0, vx, 0.5, freq)]
 
     # 3) walk fwd 3 s
     seq += [cmd(vx)] * s(3.0)
 
     # 4) ramp down to 0 in 0.5 s
-    seq += [cmd(v) for v in ramp(vx, 0.0, 0.5, freq_hz)]
+    seq += [cmd(v) for v in ramp(vx, 0.0, 0.5, freq)]
 
-    # 5) yaw 0 → YAW smoothly over 1 s
-    seq += [cmd(yaw=y) for y in ramp(0.0, yaw, 1.0, freq_hz)]
+    # 5) spin-up: ω 0 → omega in 0.5 s  (in-place turn)
+    seq += [cmd(yaw=w) for w in ramp(0.0, omega, 0.5, freq)]
 
-    # 6) hold heading for 1 s
-    seq += [cmd(yaw=yaw)] * s(1.0)
+    # 6) keep turning for 0.5 s
+    seq += [cmd(yaw=omega)] * s(0.5)
 
-    # 7) ramp fwd again 0 → VX in 0.5 s (keep heading)
-    seq += [cmd(v, yaw=yaw) for v in ramp(0.0, vx, 0.5, freq_hz)]
+    # 7) spin-down ω omega → 0 in 0.5 s
+    seq += [cmd(yaw=w) for w in ramp(omega, 0.0, 0.5, freq)]
 
-    # 8) walk fwd 3 s at new heading
-    seq += [cmd(vx, yaw=yaw)] * s(3.0)
+    # 8) ramp fwd again 0 → VX in 0.5 s (now facing right)
+    seq += [cmd(v) for v in ramp(0.0, vx, 0.5, freq)]
 
-    # 9) ramp down to 0 in 0.5 s (still at YAW)
-    seq += [cmd(v, yaw=yaw) for v in ramp(vx, 0.0, 0.5, freq_hz)]
+    # 9) walk fwd 3 s
+    seq += [cmd(vx)] * s(3.0)
 
-    # 10) stand 3 s at final heading
-    seq += [cmd(yaw=yaw)] * s(3.0)
+    # 10) ramp down to 0 in 0.5 s
+    seq += [cmd(v) for v in ramp(vx, 0.0, 0.5, freq)]
+
+    # 11) stand 3 s
+    seq += [cmd()] * s(3.0)
 
     return seq
 
 
-async def _run(args: argparse.Namespace) -> None:
-    # Boot sim once to learn control frequency.
-    sim, runner, provider = await load_sim_and_runner(
-        args.kinfer,
-        args.robot,
-        cmd_factory=lambda: PrecomputedInputState([cmd()]),  # placeholder
-    )
-
-    freq = sim._control_frequency
-    commands = make_commands(freq)
-
-    # Swap in the real pre-computed state.
-    provider.keyboard_state = PrecomputedInputState(commands)  # type: ignore[attr-defined]
-
-    seconds = len(commands) / freq
-    outdir = args.out / time.strftime("%Y%m%d-%H%M%S")
-    log = await run_episode(sim, runner, seconds, outdir, provider)
-
-    save_json(log, outdir, "walk_forward_right_log.json")
-    save_json(commands, outdir, "commands.json")
-
-
-if __name__ == "__main__":
-    colorlogging.configure()
-
-    p = argparse.ArgumentParser()
-    p.add_argument("kinfer", type=Path)
-    p.add_argument("robot")
-    p.add_argument("--out", type=Path, default=Path("runs/walk_forward_right"))
-    asyncio.run(_run(p.parse_args()))
+register("walk_forward_right", make_commands)

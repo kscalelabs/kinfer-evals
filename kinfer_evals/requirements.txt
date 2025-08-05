@@ -3,3 +3,4 @@
 kinfer-sim
 kscale
 colorlogging
+tabulate
