@@ -16,7 +16,8 @@ from kinfer_sim.provider import ModelProvider
 from kinfer_sim.simulator import MujocoSimulator
 
 from kinfer_evals.core.eval_types import PrecomputedInputState, RunArgs
-from kinfer_evals.core.eval_utils import _plot_velocity_series, _plot_xy_trajectory, get_yaw_from_quaternion, load_sim_and_runner
+from kinfer_evals.core.eval_utils import get_yaw_from_quaternion, load_sim_and_runner
+from kinfer_evals.core.plots import _plot_velocity_series, _plot_xy_trajectory
 from kinfer_evals.reference_state import ReferenceStateTracker
 
 if TYPE_CHECKING:
