@@ -106,3 +106,29 @@ def _plot_velocity_series(
     outdir.mkdir(parents=True, exist_ok=True)
     fig.savefig(outdir / f"velocity_{axis}.png", dpi=150)
     plt.close(fig)
+
+
+
+
+def _plot_xy_trajectory(
+    ref_x: list[float],
+    ref_y: list[float],
+    act_x: list[float],
+    act_y: list[float],
+    outdir: Path,
+) -> None:
+    """Save a top-down plot comparing planned vs. actual XY positions."""
+    fig, ax = plt.subplots(figsize=(5, 5))
+
+    ax.plot(ref_x, ref_y, label="reference", linewidth=2, linestyle="--")
+    ax.plot(act_x, act_y, label="actual",  linewidth=1)
+
+    ax.set_aspect("equal", adjustable="datalim")
+    ax.set_xlabel("x  [m]")
+    ax.set_ylabel("y  [m]")
+    ax.set_title("XY trajectory")
+    ax.legend(loc="best")
+
+    outdir.mkdir(parents=True, exist_ok=True)
+    fig.savefig(outdir / "traj_xy.png", dpi=150)
+    plt.close(fig)

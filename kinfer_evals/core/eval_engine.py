@@ -16,7 +16,7 @@ from kinfer_sim.provider import ModelProvider
 from kinfer_sim.simulator import MujocoSimulator
 
 from kinfer_evals.core.eval_types import PrecomputedInputState, RunArgs
-from kinfer_evals.core.eval_utils import _plot_velocity_series, get_yaw_from_quaternion, load_sim_and_runner
+from kinfer_evals.core.eval_utils import _plot_velocity_series, _plot_xy_trajectory, get_yaw_from_quaternion, load_sim_and_runner
 from kinfer_evals.reference_state import ReferenceStateTracker
 
 if TYPE_CHECKING:
@@ -47,9 +47,15 @@ async def run_episode(
     error_vx_body: list[float] = []
     error_vy_body: list[float] = []
 
+    # XY traces
+    ref_x:  list[float] = []
+    ref_y:  list[float] = []
+    act_x:  list[float] = []
+    act_y:  list[float] = []
+
     quat0 = sim._data.sensor("imu_site_quat").data
     yaw0 = get_yaw_from_quaternion(quat0)
-    tracker.reset(tuple(sim._data.qpos[:2]), heading_rad=yaw0)
+    tracker.reset(tuple(sim._data.qpos[:2]), yaw=yaw0)
 
     carry, log, t0 = runner.init(), [], time.time()
     dt_ctrl = 1.0 / sim._control_frequency
@@ -76,7 +82,8 @@ async def run_episode(
             # Update reference state
             quat = sim._data.sensor("imu_site_quat").data
             yaw = get_yaw_from_quaternion(quat)
-            tracker.step((cmd_vx_body, cmd_vy_body), dt_ctrl, heading_rad=yaw)
+            omega_cmd = provider.keyboard_state.value[2] if provider else 0.0  # commanded angular vel (rad/s)
+            tracker.step((cmd_vx_body, cmd_vy_body), omega_cmd, dt_ctrl)
 
             # Convert velocity from world frame to body frame
             vx_world = float(sim._data.qvel[0])
@@ -98,6 +105,11 @@ async def run_episode(
             error_vx_body.append(vx_act_body - cmd_vx_body)
             error_vy_body.append(vy_act_body - cmd_vy_body)
 
+            ref_x.append(float(tracker.pos[0]))
+            ref_y.append(float(tracker.pos[1]))
+            act_x.append(float(sim._data.qpos[0]))
+            act_y.append(float(sim._data.qpos[1]))
+
             # keep logging the sim state
             log.append(sim.get_state().as_dict())
             await asyncio.sleep(0)
@@ -108,6 +120,9 @@ async def run_episode(
     # Produce plots
     _plot_velocity_series(time_s, command_vx_body, actual_vx_body, error_vx_body, "x", outdir)
     _plot_velocity_series(time_s, command_vy_body, actual_vy_body, error_vy_body, "y", outdir)
+
+    # Top-down XY trajectory
+    _plot_xy_trajectory(ref_x, ref_y, act_x, act_y, outdir)
 
     # -------- summary on stdout --------------------------------------------
     mae_vx = float(np.mean(np.abs(error_vx_body)))
