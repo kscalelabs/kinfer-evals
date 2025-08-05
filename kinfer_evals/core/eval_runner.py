@@ -10,7 +10,7 @@ from pathlib import Path
 import colorlogging
 
 from kinfer_evals.core.eval_engine import run_eval
-from kinfer_evals.core.types import RunArgs
+from kinfer_evals.core.eval_types import RunArgs
 from kinfer_evals.evals import REGISTRY
 
 _p = argparse.ArgumentParser(prog="kinfer-eval")
@@ -22,7 +22,7 @@ _p.add_argument("--seconds", type=float, default=5.0)
 
 
 def main() -> None:
-    colorlogging.configure(level="INFO")  # NEW – pretty, coloured output
+    colorlogging.configure(level="INFO")
 
     ns = _p.parse_args()
     make = REGISTRY[ns.eval]  # the registered function

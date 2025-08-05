@@ -13,7 +13,7 @@ from kscale import K
 from kscale.web.gen.api import RobotURDFMetadataOutput
 from matplotlib import pyplot as plt
 
-from kinfer_evals.core.types import CommandFactory
+from kinfer_evals.core.eval_types import CommandFactory
 
 
 def cmd(vx: float = 0.0, yaw: float = 0.0) -> list[float]:
