@@ -169,22 +169,33 @@ async def run_episode(
                        err_am, "mag", outdir, run_meta)
 
 
-    mae_vx = float(np.mean(np.abs(error_vx_body)))
-    mae_vy = float(np.mean(np.abs(error_vy_body)))
-    rmse_vx = float(np.sqrt(np.mean(np.square(error_vx_body))))
-    rmse_vy = float(np.sqrt(np.mean(np.square(error_vy_body))))
+    # Velocity errors
+    mae_vx   = float(np.mean(np.abs(error_vx_body)))
+    mae_vy   = float(np.mean(np.abs(error_vy_body)))
+    rmse_vx  = float(np.sqrt(np.mean(np.square(error_vx_body))))
+    rmse_vy  = float(np.sqrt(np.mean(np.square(error_vy_body))))
+
+    # Acceleration errors
+    mae_ax   = float(np.mean(np.abs(err_ax)))
+    mae_ay   = float(np.mean(np.abs(err_ay)))
+    mae_am   = float(np.mean(np.abs(err_am)))
+    rmse_ax  = float(np.sqrt(np.mean(np.square(err_ax))))
+    rmse_ay  = float(np.sqrt(np.mean(np.square(err_ay))))
+    rmse_am  = float(np.sqrt(np.mean(np.square(err_am))))
 
     logger.info(
-        "\n=== velocity-tracking summary ===\n"
-        "Mean-abs error  vx: %.4f m/s   vy: %.4f m/s\n"
-        "RMSE            vx: %.4f m/s   vy: %.4f m/s\n"
-        "samples: %d\n"
-        "==================================\n",
-        mae_vx,
-        mae_vy,
-        rmse_vx,
-        rmse_vy,
-        len(error_vx_body),
+        "\n================  Tracking summary  ================\n"
+        "Velocity – mean absolute error   vx: %.4f m/s   vy: %.4f m/s\n"
+        "Velocity – root mean square err  vx: %.4f m/s   vy: %.4f m/s\n"
+        "Acceleration – mean absolute err ax: %.4f m/s²  ay: %.4f m/s²  |a|: %.4f m/s²\n"
+        "Acceleration – root mean square  ax: %.4f m/s²  ay: %.4f m/s²  |a|: %.4f m/s²\n"
+        "Samples (velocity): %d    Samples (acceleration): %d\n"
+        "====================================================\n",
+        mae_vx, mae_vy,
+        rmse_vx, rmse_vy,
+        mae_ax, mae_ay, mae_am,
+        rmse_ax, rmse_ay, rmse_am,
+        len(error_vx_body), len(err_ax),
     )
 
     return log
