@@ -12,6 +12,8 @@ from kinfer_sim.simulator import MujocoSimulator
 from kscale import K
 from kscale.web.gen.api import RobotURDFMetadataOutput
 from matplotlib import pyplot as plt
+from matplotlib.collections import LineCollection
+from matplotlib import colors
 
 from kinfer_evals.core.eval_types import CommandFactory
 
@@ -117,16 +119,52 @@ def _plot_xy_trajectory(
     act_y: list[float],
     outdir: Path,
 ) -> None:
-    """Save a top-down plot comparing planned vs. actual XY positions."""
+    """
+    Save a top-down plot comparing reference vs. actual XY trajectories.
+    Reference path: green → blue, actual path: yellow → red (early → late).
+    """
     fig, ax = plt.subplots(figsize=(5, 5))
 
-    ax.plot(ref_x, ref_y, label="reference", linewidth=2, linestyle="--")
-    ax.plot(act_x, act_y, label="actual",  linewidth=1)
+    def add_gradient_line(
+        x: list[float],
+        y: list[float],
+        start_col: str,
+        end_col: str,
+        label: str,
+        lw: float = 2.0,
+    ) -> None:
+        """Plot a LineCollection that fades from *start_col* → *end_col*."""
+        pts = np.column_stack([x, y])
+        segs = np.concatenate([pts[:-1, None], pts[1:, None]], axis=1)
+
+        cmap = colors.LinearSegmentedColormap.from_list(
+            f"{label}_cmap",
+            [start_col, end_col],
+        )
+
+        lc = LineCollection(
+            segs,
+            cmap=cmap,
+            norm=colors.Normalize(0, len(x) - 1),
+            linewidth=lw,
+        )
+        lc.set_array(np.arange(len(x)))
+        ax.add_collection(lc)
+
+        # add dummy handle for legend
+        mid_colour = cmap(0.75)
+        ax.plot([], [], color=mid_colour, lw=lw, label=label)
+
+    # reference: green → blue
+    add_gradient_line(ref_x, ref_y, "#00b050", "#0070ff", "reference", lw=2.5)
+
+    # actual: yellow → red
+    add_gradient_line(act_x, act_y, "#ffd700", "#ff0000", "actual", lw=1.5)
 
     ax.set_aspect("equal", adjustable="datalim")
     ax.set_xlabel("x  [m]")
     ax.set_ylabel("y  [m]")
-    ax.set_title("XY trajectory")
+    ax.set_title("XY trajectory (light→dark = time)")
     ax.legend(loc="best")
 
     outdir.mkdir(parents=True, exist_ok=True)
