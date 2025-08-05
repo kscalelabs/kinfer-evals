@@ -13,7 +13,7 @@ ramp → stop    0.5 s
 stand 3 s
 """
 
-from kinfer_evals.core.eval_engine import cmd, ramp
+from kinfer_evals.core.eval_utils import cmd, ramp
 from kinfer_evals.evals import register
 
 def make_commands(freq: float, _seconds: float):
