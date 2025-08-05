@@ -3,7 +3,7 @@ from pathlib import Path
 
 @dataclass
 class RunArgs:
-    name: str
+    eval_name: str
     kinfer: Path
     robot: str
     out: Path

@@ -19,6 +19,11 @@ from matplotlib import pyplot as plt
 from kinfer_evals.core.types import RunArgs
 from kinfer_evals.reference_state import ReferenceStateTracker
 
+# Import CommandMaker type (avoiding circular import)
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from kinfer_evals.evals import CommandMaker
+
 logger = logging.getLogger(__name__)
 
 
@@ -250,7 +255,35 @@ async def run_factory(
 
     outdir = args.out / time.strftime("%Y%m%d-%H%M%S")
     log = await run_episode(sim, runner, args.seconds, outdir, provider)
-    save_json(log, outdir, f"{args.name}_log.json")
+    save_json(log, outdir, f"{args.eval_name}_log.json")
+
+
+async def run_episode_from_fn(
+    make_cmds: "CommandMaker",
+    run_name: str,
+    args: RunArgs,
+) -> None:
+    """
+    Common driver used by *every* eval:
+      • spin up sim/runner with a dummy keyboard state
+      • build the full command list upfront
+      • wrap it in PrecomputedInputState
+      • run the episode & save artefacts
+    """
+    sim, runner, provider = await load_sim_and_runner(
+        args.kinfer,
+        args.robot,
+        cmd_factory=lambda: PrecomputedInputState([[0.0, 0.0, 0.0]]),
+    )
+
+    freq = sim._control_frequency
+    commands = make_cmds(freq, args.seconds)
+    provider.keyboard_state = PrecomputedInputState(commands)
+    args.seconds = len(commands) / freq
+
+    outdir = args.out / run_name
+    log = await run_episode(sim, runner, args.seconds, outdir, provider)
+    save_json(log, outdir, f"{run_name}_log.json")
 
 
 class PrecomputedInputState(InputState):
