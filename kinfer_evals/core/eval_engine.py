@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 
 # Import CommandMaker type (avoiding circular import)
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING, Mapping, Sequence
 
 import numpy as np
 from kinfer.rust_bindings import PyModelRunner
@@ -30,7 +30,7 @@ async def run_episode(
     seconds: float,
     outdir: Path,
     provider: ModelProvider | None = None,
-) -> list[dict[str, object]]:
+) -> list[Mapping[str, object]]:
     """Physics → inference → actuation loop + reference-error logging & plots."""
     tracker = ReferenceStateTracker()
 
@@ -130,7 +130,7 @@ async def run_episode(
     return log
 
 
-def save_json(log: Sequence[dict], out: Path, fname: str = "log.json") -> None:
+def save_json(log: Sequence[Mapping[str, object]], out: Path, fname: str = "log.json") -> None:
     out.mkdir(parents=True, exist_ok=True)
     (out / fname).write_text(json.dumps(log, indent=2))
 
