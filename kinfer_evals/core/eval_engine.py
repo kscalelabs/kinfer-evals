@@ -268,7 +268,8 @@ async def run_episode(
     logger.info("Saved combined summary to %s", outdir / "run_summary.json")
 
     try:
-        url = push_summary(combined)
+        pngs = sorted(outdir.glob("*.png"))
+        url = push_summary(combined, pngs)
         logger.info("Logged run to Notion: %s", url)
     except Exception as exc:
         logger.warning("Failed to push results to Notion: %s", exc)

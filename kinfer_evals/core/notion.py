@@ -1,12 +1,46 @@
 
 import os
 from datetime import datetime
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
+import mimetypes, pathlib, requests, uuid
 
 from notion_client import Client
 
 NOTION_TOKEN = os.getenv("NOTION_API_KEY")
 DB_ID        = os.getenv("NOTION_DB_ID")
+NOTION_VER   = "2022-06-28"         # required for the file-upload APIs
+
+def _hdr() -> dict[str, str]:
+    return {
+        "Authorization": f"Bearer {NOTION_TOKEN}",
+        "Notion-Version": NOTION_VER,
+        "accept": "application/json",
+    }
+
+
+def _upload_file(path: pathlib.Path) -> str:
+    """Upload *path* (≤20 MB) to Notion and return its file_upload.id."""
+    mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+
+    r = requests.post(
+        "https://api.notion.com/v1/file_uploads",
+        json={"filename": path.name, "content_type": mime},
+        headers=_hdr() | {"content-type": "application/json"},
+    )
+    r.raise_for_status()
+    obj = r.json()
+    upload_id = obj["id"]
+
+    with open(path, "rb") as fh:
+        files = {"file": (path.name, fh, mime)}
+        r2 = requests.post(
+            f"https://api.notion.com/v1/file_uploads/{upload_id}/send",
+            files=files,
+            headers=_hdr(),
+            timeout=30,
+        )
+    r2.raise_for_status()
+    return upload_id
 
 def _client() -> Client:
     if NOTION_TOKEN is None:
@@ -40,7 +74,10 @@ def ensure_columns(notion: Client, db_id: str, data: dict[str, Any]) -> None:
             properties=additions,
         )
 
-def push_summary(summary: dict[str, object]) -> str:
+def push_summary(
+    summary: dict[str, object],
+    pngs: Sequence[pathlib.Path] | None = None,
+) -> str:
     """
     Create a row in the configured Notion DB and return its URL.
 
@@ -60,7 +97,6 @@ def push_summary(summary: dict[str, object]) -> str:
     db_schema = notion.databases.retrieve(database_id=DB_ID)
     title_col = _title_prop_name(db_schema)
 
-    # ---------- build Notion-style property map ---------------------------
     props: dict[str, object] = {}
     for key, val in summary.items():
         if key == "kinfer_file":  # shorten for readability
@@ -79,4 +115,27 @@ def push_summary(summary: dict[str, object]) -> str:
     }
 
     page = notion.pages.create(parent={"database_id": DB_ID}, properties=props)
+
+    if pngs:
+        children: list[dict[str, Any]] = []
+        for p in pngs:
+            fid = _upload_file(p)
+            children.append(
+                {
+                    "object": "block",
+                    "type": "image",
+                    "image": {
+                        "type": "file_upload",
+                        "file_upload": {"id": fid},
+                        "caption": [{"type": "text", "text": {"content": p.name}}],
+                    },
+                }
+            )
+        # append in a single PATCH
+        requests.patch(
+            f"https://api.notion.com/v1/blocks/{page['id']}/children",
+            json={"children": children},
+            headers=_hdr() | {"Content-Type": "application/json"},
+        ).raise_for_status()
+
     return page["url"]
