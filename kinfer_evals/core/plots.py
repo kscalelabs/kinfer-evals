@@ -1,11 +1,21 @@
 """Plotting utilities."""
 
 from pathlib import Path
+from typing import Mapping
 
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.collections import LineCollection
 from matplotlib import colors
+import textwrap                      # ← NEW
+
+
+def wrap(label: str, content: str, width: int = 40) -> str:
+    """Wrap long content with proper indentation for footer lines."""
+    pad = " " * (len(label) + 2)            # keep later lines aligned
+    first, *rest = textwrap.fill(content, width=width,
+                                 subsequent_indent=pad).splitlines()
+    return f"{label}: {first}" + ("\n" + "\n".join(rest) if rest else "")
 
 
 def _plot_velocity_series(
@@ -15,18 +25,22 @@ def _plot_velocity_series(
     error_body: list[float],
     axis: str,
     outdir: Path,
+    run_info: dict[str, str],
 ) -> None:
     """Save PNG with two stacked plots."""
     fig, (ax_top, ax_err) = plt.subplots(
         2,
         1,
         sharex=True,
-        figsize=(7, 4),
+        figsize=(7, 5),            # +1 inch for footer
         height_ratios=[3, 1],
     )
+    # reserve bottom 20 % for the footer
+    fig.tight_layout(rect=(0, 0.20, 1, 1))
 
     ax_top.plot(time_s, command_body, label=f"command v{axis}")
     ax_top.plot(time_s, actual_body, label=f"actual  v{axis}")
+    ax_top.set_title(f"Body-frame velocity tracking – v{axis}", pad=8)
     ax_top.set_ylabel(f"v{axis}  [m·s⁻¹]")
     ax_top.legend(loc="upper right")
 
@@ -35,9 +49,23 @@ def _plot_velocity_series(
     ax_err.set_ylabel("err")
     ax_err.legend(loc="upper right")
 
-    fig.tight_layout()
+    # ---------- footer ----------------------------------------------------
+    footer_lines = [
+        wrap("kinfer",   run_info["kinfer"]),
+        wrap("robot",    run_info["robot"]),
+        wrap("eval",     run_info["eval_name"]),
+        wrap("timestamp",run_info["timestamp"]),
+        wrap("outdir",   run_info["outdir"]),
+    ]
+    fig.text(
+        0.0, -0.02,
+        "\n".join(footer_lines),
+        ha="left", va="top",
+        fontsize=14, family="monospace", linespacing=1.4,
+    )
+
     outdir.mkdir(parents=True, exist_ok=True)
-    fig.savefig(outdir / f"velocity_{axis}.png", dpi=150)
+    fig.savefig(outdir / f"velocity_{axis}.png", dpi=150, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -49,12 +77,16 @@ def _plot_xy_trajectory(
     act_x: list[float],
     act_y: list[float],
     outdir: Path,
+    run_info: dict[str, str],
 ) -> None:
     """
     Save a top-down plot comparing reference vs. actual XY trajectories.
     Reference path: green → blue, actual path: yellow → red (early → late).
     """
-    fig, ax = plt.subplots(figsize=(5, 5))
+    # give the footer some breathing room → make the figure taller
+    fig, ax = plt.subplots(figsize=(5, 6))          # ↑ extra 1 inch
+    # keep 20 % of the figure's height free at the bottom
+    fig.tight_layout(rect=(0, 0.20, 1, 1))          # left, bottom, right, top
 
     def add_gradient_line(
         x: list[float],
@@ -95,9 +127,28 @@ def _plot_xy_trajectory(
     ax.set_aspect("equal", adjustable="datalim")
     ax.set_xlabel("x  [m]")
     ax.set_ylabel("y  [m]")
-    ax.set_title("XY trajectory (light→dark = time)")
+    ax.set_title("XY trajectory (colour = time progression)", pad=10)
     ax.legend(loc="best")
 
+    # ---------- footer ----------------------------------------------------
+    footer_lines = [
+        wrap("kinfer",   run_info["kinfer"]),
+        wrap("robot",    run_info["robot"]),
+        wrap("eval",     run_info["eval_name"]),
+        wrap("timestamp",run_info["timestamp"]),
+        wrap("outdir",   run_info["outdir"]),
+    ]
+    footer_text = "\n".join(footer_lines)
+    fig.text(
+        0.0, -0.02,                       # x-pos (left), y-pos just below the axes
+        footer_text,
+        ha="left",
+        va="top",
+        fontsize=14,                      # double-sized as requested
+        linespacing=1.4,
+        family="monospace",
+    )
+
     outdir.mkdir(parents=True, exist_ok=True)
-    fig.savefig(outdir / "traj_xy.png", dpi=150)
+    fig.savefig(outdir / "traj_xy.png", dpi=150, bbox_inches="tight")
     plt.close(fig)

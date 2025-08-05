@@ -11,9 +11,6 @@ from kinfer_sim.server import find_mjcf, get_model_metadata
 from kinfer_sim.simulator import MujocoSimulator
 from kscale import K
 from kscale.web.gen.api import RobotURDFMetadataOutput
-from matplotlib import pyplot as plt
-from matplotlib.collections import LineCollection
-from matplotlib import colors
 
 from kinfer_evals.core.eval_types import CommandFactory
 

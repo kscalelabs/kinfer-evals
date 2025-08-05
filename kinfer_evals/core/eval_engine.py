@@ -32,6 +32,7 @@ async def run_episode(
     seconds: float,
     outdir: Path,
     provider: ModelProvider | None = None,
+    run_info: dict | None = None,
 ) -> list[Mapping[str, object]]:
     """Physics → inference → actuation loop + reference-error logging & plots."""
     tracker = ReferenceStateTracker()
@@ -119,11 +120,20 @@ async def run_episode(
         await sim.close()
 
     # Produce plots
-    _plot_velocity_series(time_s, command_vx_body, actual_vx_body, error_vx_body, "x", outdir)
-    _plot_velocity_series(time_s, command_vy_body, actual_vy_body, error_vy_body, "y", outdir)
+    run_meta = {
+        "kinfer": run_info["kinfer_file"] if run_info else "",
+        "robot": run_info["robot"] if run_info else "",
+        "eval_name": run_info["eval_name"] if run_info else "",
+        "timestamp": run_info["timestamp"] if run_info else "",
+        "outdir": run_info["output_directory"] if run_info else "",
+    }
 
-    # Top-down XY trajectory
-    _plot_xy_trajectory(ref_x, ref_y, act_x, act_y, outdir)
+    _plot_velocity_series(time_s, command_vx_body, actual_vx_body,
+                          error_vx_body, "x", outdir, run_meta)
+    _plot_velocity_series(time_s, command_vy_body, actual_vy_body,
+                          error_vy_body, "y", outdir, run_meta)
+
+    _plot_xy_trajectory(ref_x, ref_y, act_x, act_y, outdir, run_meta)
 
     # -------- summary on stdout --------------------------------------------
     mae_vx = float(np.mean(np.abs(error_vx_body)))
@@ -153,7 +163,7 @@ def save_json(log: Sequence[Mapping[str, object]], out: Path, fname: str = "log.
     logger.info("Saved log to %s", out / fname)
 
 
-def save_run_info(args: RunArgs, timestamp: str, outdir: Path, duration_seconds: float) -> None:
+def save_run_info(args: RunArgs, timestamp: str, outdir: Path, duration_seconds: float) -> dict:
     """Save metadata about this run for tracking purposes."""
     run_info = {
         "timestamp": timestamp,
@@ -167,6 +177,7 @@ def save_run_info(args: RunArgs, timestamp: str, outdir: Path, duration_seconds:
     outdir.mkdir(parents=True, exist_ok=True)
     (outdir / "run_info.json").write_text(json.dumps(run_info, indent=2))
     logger.info("Saved run info to %s", outdir / "run_info.json")
+    return run_info
 
 
 async def run_eval(
@@ -196,8 +207,8 @@ async def run_eval(
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     outdir = args.out / eval_name / timestamp
 
-    # Save run metadata
-    save_run_info(args, timestamp, outdir, duration_seconds)
+    # Save & keep run metadata
+    run_info = save_run_info(args, timestamp, outdir, duration_seconds)
 
-    log = await run_episode(sim, runner, duration_seconds, outdir, provider)
+    log = await run_episode(sim, runner, duration_seconds, outdir, provider, run_info)
     save_json(log, outdir, f"{eval_name}_log.json")
