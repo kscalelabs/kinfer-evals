@@ -7,7 +7,6 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-# Import CommandMaker type (avoiding circular import)
 from typing import TYPE_CHECKING, Mapping, Sequence
 
 import numpy as np
@@ -246,6 +245,26 @@ async def run_episode(
         + "\n"
     )
 
+    summary: dict[str, object] = {
+        # velocity
+        "mae_vel_x": mae_vx,          "mae_vel_y": mae_vy,
+        "rmse_vel_x": rmse_vx,        "rmse_vel_y": rmse_vy,
+        "vel_samples": len(error_vx_body),
+        # acceleration
+        "mae_accel_x": mae_ax,        "mae_accel_y": mae_ay,  "mae_accel_mag": mae_am,
+        "rmse_accel_x": rmse_ax,      "rmse_accel_y": rmse_ay, "rmse_accel_mag": rmse_am,
+        # heading (yaw)
+        "mae_heading": mae_yaw,       "rmse_heading": rmse_yaw,
+        # angular velocity
+        "mae_omega": mae_om,          "rmse_omega": rmse_om,
+        "omega_samples": len(err_omega),
+    }
+
+    # merge with run-level metadata and save **one** file
+    combined: dict[str, object] = {**run_info, **summary}
+    (outdir / "run_summary.json").write_text(json.dumps(combined, indent=2))
+    logger.info("Saved combined summary to %s", outdir / "run_summary.json")
+
     return log
 
 
@@ -255,7 +274,7 @@ def save_json(log: Sequence[Mapping[str, object]], out: Path, fname: str = "log.
     logger.info("Saved log to %s", out / fname)
 
 
-def save_run_info(args: RunArgs, timestamp: str, outdir: Path, duration_seconds: float) -> dict:
+def build_run_info(args: RunArgs, timestamp: str, outdir: Path, duration_seconds: float) -> dict:
     """Save metadata about this run for tracking purposes."""
     run_info = {
         "timestamp": timestamp,
@@ -266,9 +285,6 @@ def save_run_info(args: RunArgs, timestamp: str, outdir: Path, duration_seconds:
         "output_directory": str(outdir.absolute()),
     }
 
-    outdir.mkdir(parents=True, exist_ok=True)
-    (outdir / "run_info.json").write_text(json.dumps(run_info, indent=2))
-    logger.info("Saved run info to %s", outdir / "run_info.json")
     return run_info
 
 
@@ -300,7 +316,7 @@ async def run_eval(
     outdir = args.out / eval_name / timestamp
 
     # Save & keep run metadata
-    run_info = save_run_info(args, timestamp, outdir, duration_seconds)
+    run_info = build_run_info(args, timestamp, outdir, duration_seconds)
 
     log = await run_episode(sim, runner, duration_seconds, outdir, provider, run_info)
     save_json(log, outdir, f"{eval_name}_log.json")
