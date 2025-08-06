@@ -43,6 +43,7 @@ def default_sim(
     *,
     dt: float = 1e-4,
     render: bool = False,
+    free_camera: bool = False,
 ) -> MujocoSimulator:
     return MujocoSimulator(
         model_path=mjcf,
@@ -50,6 +51,7 @@ def default_sim(
         dt=dt,
         render_mode="window" if render else "offscreen",
         start_height=1.1,
+        free_camera=free_camera,
     )
 
 

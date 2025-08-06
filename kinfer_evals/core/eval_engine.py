@@ -87,11 +87,14 @@ async def run_episode(
     yaw0 = get_yaw_from_quaternion(quat0)
     tracker.reset(tuple(sim._data.qpos[:2]), yaw=yaw0)
 
-    carry, log, t0 = runner.init(), [], time.time()
+    carry, log = runner.init(), []
     dt_ctrl = 1.0 / sim._control_frequency
 
+    n_ctrl_steps = int(round(seconds * sim._control_frequency))
+    step_idx = 0
+
     try:
-        while time.time() - t0 < seconds:
+        while step_idx < n_ctrl_steps:
             # Step physics
             for _ in range(sim.sim_decimation):
                 await sim.step()
@@ -151,6 +154,8 @@ async def run_episode(
             # keep logging the sim state
             log.append(sim.get_state().as_dict())
             await asyncio.sleep(0)
+
+            step_idx += 1
 
     finally:
         await sim.close()
@@ -338,6 +343,7 @@ async def run_eval(
         args.robot,
         cmd_factory=lambda: PrecomputedInputState([[0.0, 0.0, 0.0]]),
         render=args.render,
+        free_camera=False,
     )
 
     freq = sim._control_frequency
