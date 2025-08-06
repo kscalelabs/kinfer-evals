@@ -2,6 +2,7 @@
 from __future__ import annotations
 from pathlib import Path
 import numpy as np, h5py, math
+import mujoco                               # → mj_contactForce API
 from typing import Any
 
 _CHUNK = 1024          # steps per chunk → good compression ÷ I/O
@@ -12,14 +13,15 @@ class Recorder:
     def __init__(self, file: Path, model: Any, *, compress: str = "gzip", lvl: int = 4) -> None:
         self._f = h5py.File(file, "w")
         self._i = 0
+        self._model = model  # store model reference for mj_contactForce
 
-        def _ds(name: str, shape1: tuple[int, ...]):
+        def _ds(name: str, shape1: tuple[int, ...], dtype: str = "f4"):
             return self._f.create_dataset(
                 name,
                 shape=(0, *shape1),
                 maxshape=(None, *shape1),
                 chunks=(_CHUNK, *shape1),
-                dtype="f4",
+                dtype=dtype,
                 compression=compress,
                 compression_opts=lvl,
             )
@@ -30,7 +32,19 @@ class Recorder:
         self.qvel     = _ds("qvel",        (nv,))
         self.act_frc  = _ds("act_force",   (nu,))
         self.cacc     = _ds("cacc",        (nb, 6))      # 6-D per body
-        self.wrench   = _ds("contact_wrench", (0, 6))    # ragged; will resize per-step
+        
+        # --- ragged contact wrench ------------------------------------ #
+        vlen_f4 = h5py.vlen_dtype(np.dtype("f4"))        # VLEN float32
+        self.wrench = self._f.create_dataset(
+            "contact_wrench",
+            shape=(0,),                 # 1-D over timesteps
+            maxshape=(None,),
+            chunks=(_CHUNK,),           # single chunk axis
+            dtype=vlen_f4,
+            compression=compress,
+            compression_opts=lvl,
+        )
+        self.ncon = _ds("contact_count", (), dtype="i2") # #contacts/step
 
     # ------- public API -------------------------------------------------- #
     def append(self, data, t: float) -> None:
@@ -49,13 +63,20 @@ class Recorder:
             d[s] = arr
 
         # ------- contact wrench (ragged) -------------------------------- #
-        cf = np.zeros(6, dtype=np.float32)
-        forces = []
+        cf     = np.empty(6, dtype=np.float64)                   # mjtNum = float64
+        frames = []
         for j in range(data.ncon):
-            # mujoco.mj_contactForce(model.ptr, data.ptr, j, cf)  # C-API
-            forces.append(cf.copy())                               # stub until C call wired
+            mujoco.mj_contactForce(self._model, data, j, cf)     # 6-D FT
+            frames.append(cf.copy().astype(np.float32))          # cast to f32 for storage
+
+        # flatten (ncon,6) → (6*ncon,)  for storage; reader reshapes later
+        flat = np.concatenate(frames).astype("f4") if frames else np.zeros(0, dtype="f4")
+
         self.wrench.resize(self._i + 1, axis=0)
-        self.wrench[s] = np.stack(forces) if forces else np.zeros((0, 6), "f4")
+        self.wrench[s] = [flat]            # each element = 1 VLEN array
+
+        self.ncon.resize(self._i + 1, axis=0)
+        self.ncon[s] = data.ncon
 
         self._i += 1
 

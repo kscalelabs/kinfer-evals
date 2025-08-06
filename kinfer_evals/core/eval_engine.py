@@ -29,10 +29,13 @@ from kinfer_evals.artefacts.plots import (
 )
 from kinfer_evals.reference_state import ReferenceStateTracker
 
+from kinfer_evals.core.recorder import Recorder
+
 if TYPE_CHECKING:
     from kinfer_evals.evals import CommandMaker
 
 logger = logging.getLogger(__name__)
+
 
 
 async def run_episode(
@@ -49,6 +52,8 @@ async def run_episode(
     tracker = ReferenceStateTracker()
 
     outdir.mkdir(parents=True, exist_ok=True)
+    
+    rec = Recorder(outdir / "episode.h5", sim._model)
 
     video_writer = None
     decim = 1
@@ -158,6 +163,8 @@ async def run_episode(
 
             # keep logging the sim state
             log.append(sim.get_state().as_dict())
+
+            rec.append(sim._data, step_idx * dt_ctrl)
             await asyncio.sleep(0)
 
             step_idx += 1
@@ -166,6 +173,7 @@ async def run_episode(
         await sim.close()
         if video_writer:
             video_writer.close()
+        rec.close()
 
     # Track acceleration
     dt = dt_ctrl
