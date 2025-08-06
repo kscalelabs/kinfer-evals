@@ -1,15 +1,19 @@
+"""Push results to Notion."""
 
+import mimetypes
 import os
+import pathlib
 from datetime import datetime
-from zoneinfo import ZoneInfo
 from typing import Any, Mapping, Sequence
-import mimetypes, pathlib, requests, uuid
+from zoneinfo import ZoneInfo
 
+import requests
 from notion_client import Client
 
 NOTION_TOKEN = os.getenv("NOTION_API_KEY")
-DB_ID        = os.getenv("NOTION_DB_ID")
-NOTION_VER   = "2022-06-28"         # required for the file-upload APIs
+DB_ID = os.getenv("NOTION_DB_ID")
+NOTION_VER = "2022-06-28"  # required for the file-upload APIs
+
 
 def _hdr() -> dict[str, str]:
     return {
@@ -43,16 +47,17 @@ def _upload_file(path: pathlib.Path) -> str:
     r2.raise_for_status()
     return upload_id
 
+
 def _client() -> Client:
     if NOTION_TOKEN is None:
         raise RuntimeError("NOTION_API_KEY not set")
     return Client(auth=NOTION_TOKEN)
 
+
 def _title_prop_name(db_json: Mapping[str, object]) -> str:
     """Return the name of the *title* column for a DB."""
-    return next(
-        name for name, spec in db_json["properties"].items() if spec["type"] == "title"
-    )
+    return next(name for name, spec in db_json["properties"].items() if spec["type"] == "title")
+
 
 def ensure_columns(notion: Client, db_id: str, data: dict[str, Any]) -> None:
     """Add any columns in *data* that don't yet exist in the Notion DB."""
@@ -73,29 +78,29 @@ def ensure_columns(notion: Client, db_id: str, data: dict[str, Any]) -> None:
         else:
             additions[key] = {"rich_text": {}}
 
-    if additions:           # only call the API if something is missing
+    if additions:  # only call the API if something is missing
         notion.databases.update(
             database_id=db_id,
             properties=additions,
         )
 
+
 def push_summary(
     summary: dict[str, object],
-    files: Sequence[pathlib.Path] | None = None,          # png / mp4 / …
+    files: Sequence[pathlib.Path] | None = None,  # png / mp4 / …
 ) -> str:
-    """
-    Create a row in the configured Notion DB and return its URL.
+    """Create a row in the configured Notion DB and return its URL.
 
     *Strings* become `rich_text` (or the mandatory *title* field),
     *numbers / bools* become `number` properties.
-    
+
     Auto-creates any missing columns before inserting the data.
     """
     if DB_ID is None:
         raise RuntimeError("NOTION_DB_ID not set")
 
     notion = _client()
-    
+
     try:
         stamp = datetime.fromisoformat(summary["timestamp"])
     except ValueError:
@@ -104,10 +109,10 @@ def push_summary(
     # Correct timezone to PST/PDT
     stamp_ca = stamp.replace(tzinfo=ZoneInfo("America/Los_Angeles"))
     summary_with_submitted = {**summary, "submitted": stamp_ca.isoformat()}
-    
+
     # Auto-create any missing columns first
     ensure_columns(notion, DB_ID, summary_with_submitted)
-    
+
     db_schema = notion.databases.retrieve(database_id=DB_ID)
     title_col = _title_prop_name(db_schema)
 
@@ -121,12 +126,8 @@ def push_summary(
         else:
             props[key] = {"rich_text": [{"text": {"content": str(val)}}]}
 
-
     friendly_title = os.path.basename(str(summary["kinfer_file"]))
-    props[title_col] = {
-        "title": [{"text": {"content": friendly_title}}]
-    }
-
+    props[title_col] = {"title": [{"text": {"content": friendly_title}}]}
 
     props["submitted"] = {"date": {"start": stamp_ca.isoformat()}}
 

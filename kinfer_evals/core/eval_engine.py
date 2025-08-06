@@ -3,7 +3,6 @@
 import asyncio
 import json
 import logging
-import time
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Mapping, Sequence
@@ -12,12 +11,13 @@ import numpy as np
 from kinfer.rust_bindings import PyModelRunner
 from kinfer_sim.provider import ModelProvider
 from kinfer_sim.simulator import MujocoSimulator
-from kmv.utils.logging import VideoWriter
 from kmv.app.viewer import DefaultMujocoViewer
+from kmv.utils.logging import VideoWriter
 from tabulate import tabulate
 
 from kinfer_evals.core.eval_types import PrecomputedInputState, RunArgs
-from kinfer_evals.core.eval_utils import get_yaw_from_quaternion, load_sim_and_runner, default_sim
+from kinfer_evals.core.eval_utils import get_yaw_from_quaternion, load_sim_and_runner
+from kinfer_evals.core.notion import push_summary
 from kinfer_evals.core.plots import (
     _plot_xy_trajectory,
     plot_accel,
@@ -26,8 +26,6 @@ from kinfer_evals.core.plots import (
     plot_velocity,
 )
 from kinfer_evals.reference_state import ReferenceStateTracker
-
-from kinfer_evals.core.notion import push_summary
 
 if TYPE_CHECKING:
     from kinfer_evals.evals import CommandMaker
@@ -49,7 +47,7 @@ async def run_episode(
     tracker = ReferenceStateTracker()
 
     outdir.mkdir(parents=True, exist_ok=True)
-    
+
     video_writer = None
     decim = 1
 
@@ -337,7 +335,6 @@ async def run_eval(
     • wrap it in PrecomputedInputState
     • run the episode & save artefacts
     """
-    
     sim, runner, provider = await load_sim_and_runner(
         args.kinfer,
         args.robot,
@@ -365,6 +362,6 @@ async def run_eval(
         outdir,
         provider,
         run_info,
-        record_video=not args.render,     # ← explicit toggle
+        record_video=not args.render,
     )
     save_json(log, outdir, f"{eval_name}_log.json")

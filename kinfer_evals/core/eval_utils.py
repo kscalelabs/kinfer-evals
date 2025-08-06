@@ -61,7 +61,7 @@ async def load_sim_and_runner(
     cmd_factory: CommandFactory,
     *,
     make_sim: Callable[..., MujocoSimulator] = default_sim,
-    **sim_kwargs,
+    **sim_kwargs: object,
 ) -> tuple[MujocoSimulator, PyModelRunner, ModelProvider]:
     """Shared download + construction logic."""
     async with K() as api:
