@@ -290,8 +290,9 @@ async def run_episode(
     logger.info("Saved combined summary to %s", outdir / "run_summary.json")
 
     try:
-        pngs = sorted(outdir.glob("*.png"))
-        url = push_summary(combined, pngs)
+        vid = outdir / "video.mp4"
+        artefacts = ([vid] if vid.exists() else []) + sorted(outdir.glob("*.png"))
+        url = push_summary(combined, artefacts)
         logger.info("Logged run to Notion: %s", url)
     except Exception as exc:
         logger.warning("Failed to push results to Notion: %s", exc)

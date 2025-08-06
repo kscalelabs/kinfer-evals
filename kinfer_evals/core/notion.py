@@ -76,7 +76,7 @@ def ensure_columns(notion: Client, db_id: str, data: dict[str, Any]) -> None:
 
 def push_summary(
     summary: dict[str, object],
-    pngs: Sequence[pathlib.Path] | None = None,
+    files: Sequence[pathlib.Path] | None = None,          # png / mp4 / …
 ) -> str:
     """
     Create a row in the configured Notion DB and return its URL.
@@ -116,15 +116,23 @@ def push_summary(
 
     page = notion.pages.create(parent={"database_id": DB_ID}, properties=props)
 
-    if pngs:
+    if files:
         children: list[dict[str, Any]] = []
-        for p in pngs:
+        for p in files:
             fid = _upload_file(p)
+            ext = p.suffix.lower()
+            if ext in {".png", ".jpg", ".jpeg", ".gif"}:
+                block_type = "image"
+            elif ext in {".mp4", ".mov", ".mkv", ".webm"}:
+                block_type = "video"
+            else:
+                block_type = "file"
+
             children.append(
                 {
                     "object": "block",
-                    "type": "image",
-                    "image": {
+                    "type": block_type,
+                    block_type: {
                         "type": "file_upload",
                         "file_upload": {"id": fid},
                         "caption": [{"type": "text", "text": {"content": p.name}}],
