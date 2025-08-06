@@ -4,7 +4,7 @@ import mimetypes
 import os
 import pathlib
 from datetime import datetime
-from typing import Any, Mapping, Sequence
+from typing import Mapping, Sequence, cast
 from zoneinfo import ZoneInfo
 
 import requests
@@ -55,16 +55,17 @@ def _client() -> Client:
 
 
 def _title_prop_name(db_json: Mapping[str, object]) -> str:
-    """Return the name of the *title* column for a DB."""
-    return next(name for name, spec in db_json["properties"].items() if spec["type"] == "title")
+    """Return the **name** of the column whose type is `"title"`."""
+    props = cast(dict[str, object], db_json.get("properties", {}))
+    return next(name for name, spec in props.items() if cast(dict[str, object], spec).get("type") == "title")
 
 
-def ensure_columns(notion: Client, db_id: str, data: dict[str, Any]) -> None:
+def ensure_columns(notion: Client, db_id: str, data: dict[str, object]) -> None:
     """Add any columns in *data* that don't yet exist in the Notion DB."""
-    db_obj = notion.databases.retrieve(database_id=db_id)
-    existing = db_obj["properties"].keys()
+    db_obj = cast(dict[str, object], notion.databases.retrieve(database_id=db_id))
+    existing = cast(dict[str, object], db_obj.get("properties", {})).keys()
 
-    additions: dict[str, dict[str, Any]] = {}
+    additions: dict[str, dict[str, object]] = {}
     for key, value in data.items():
         if key in existing:
             continue
@@ -101,10 +102,11 @@ def push_summary(
 
     notion = _client()
 
+    ts_raw = str(summary["timestamp"])
     try:
-        stamp = datetime.fromisoformat(summary["timestamp"])
-    except ValueError:
-        stamp = datetime.strptime(summary["timestamp"], "%Y%m%d-%H%M%S")
+        stamp = datetime.fromisoformat(ts_raw)
+    except ValueError:  # fallback for legacy "YYYYmmdd-HHMMSS"
+        stamp = datetime.strptime(ts_raw, "%Y%m%d-%H%M%S")
 
     # Correct timezone to PST/PDT
     stamp_ca = stamp.replace(tzinfo=ZoneInfo("America/Los_Angeles"))
@@ -113,7 +115,7 @@ def push_summary(
     # Auto-create any missing columns first
     ensure_columns(notion, DB_ID, summary_with_submitted)
 
-    db_schema = notion.databases.retrieve(database_id=DB_ID)
+    db_schema = cast(dict[str, object], notion.databases.retrieve(database_id=DB_ID))
     title_col = _title_prop_name(db_schema)
 
     props: dict[str, object] = {}
@@ -131,10 +133,10 @@ def push_summary(
 
     props["submitted"] = {"date": {"start": stamp_ca.isoformat()}}
 
-    page = notion.pages.create(parent={"database_id": DB_ID}, properties=props)
+    page = cast(dict[str, object], notion.pages.create(parent={"database_id": DB_ID}, properties=props))
 
     if files:
-        children: list[dict[str, Any]] = []
+        children: list[dict[str, object]] = []
         for p in files:
             fid = _upload_file(p)
             ext = p.suffix.lower()
@@ -163,4 +165,4 @@ def push_summary(
             headers=_hdr() | {"Content-Type": "application/json"},
         ).raise_for_status()
 
-    return page["url"]
+    return str(page["url"])
