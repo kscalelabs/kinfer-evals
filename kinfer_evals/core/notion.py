@@ -101,7 +101,7 @@ def push_summary(
     except ValueError:
         stamp = datetime.strptime(summary["timestamp"], "%Y%m%d-%H%M%S")
 
-    # Attach the California tzinfo (PST/PDT will be handled automatically)
+    # Correct timezone to PST/PDT
     stamp_ca = stamp.replace(tzinfo=ZoneInfo("America/Los_Angeles"))
     summary_with_submitted = {**summary, "submitted": stamp_ca.isoformat()}
     
