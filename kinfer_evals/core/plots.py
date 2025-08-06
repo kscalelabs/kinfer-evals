@@ -175,6 +175,41 @@ def plot_omega(
     )
 
 
+def plot_actions(
+    time_s: Sequence[float],
+    actions: Sequence[Sequence[float]],
+    joint_names: Sequence[str],
+    outdir: Path,
+    info: dict[str, object],
+) -> None:
+    """Plot target joint positions over time, one coloured line per joint."""
+    # leave extra vertical room for a legend row below the axes
+    fig, ax = plt.subplots(figsize=(8, 5))
+    fig.tight_layout(rect=(0, 0.15, 1, 1))  # 15 % footer for legend
+
+    for j, name in enumerate(joint_names):
+        ax.plot(time_s, [a[j] for a in actions], label=name, linewidth=1)
+
+    ax.set_title("Per-joint action targets")
+    ax.set_xlabel("time [s]")
+    ax.set_ylabel("target position [rad]")
+    # ----- legend below the plot ------------------------------------- #
+    n_cols = min(4, max(1, len(joint_names) // 2))  # auto-fit ≤4 cols
+    ax.legend(
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.12),  # centred, just below axes
+        ncol=n_cols,
+        fontsize=7,
+        frameon=False,
+    )
+
+    _add_footer(fig, info)
+
+    outdir.mkdir(parents=True, exist_ok=True)
+    fig.savefig(outdir / "actions.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
 def _plot_xy_trajectory(
     ref_x: Sequence[float],
     ref_y: Sequence[float],

@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Mapping, Sequence
 import numpy as np
 from kinfer.rust_bindings import PyModelRunner
 from kinfer_sim.provider import ModelProvider
+from kinfer_sim.server import load_joint_names
 from kinfer_sim.simulator import MujocoSimulator
 from kmv.app.viewer import DefaultMujocoViewer
 from kmv.utils.logging import VideoWriter
@@ -21,6 +22,7 @@ from kinfer_evals.core.notion import push_summary
 from kinfer_evals.core.plots import (
     _plot_xy_trajectory,
     plot_accel,
+    plot_actions,
     plot_heading,
     plot_omega,
     plot_velocity,
@@ -70,6 +72,8 @@ async def run_episode(
     error_vx_body: list[float] = []
     error_vy_body: list[float] = []
 
+    actions: list[list[float]] = []
+
     # yaw / ω
     yaw_ref: list[float] = []
     yaw_act: list[float] = []
@@ -109,6 +113,9 @@ async def run_episode(
             # Inference
             out, carry = runner.step(carry)
             runner.take_action(out)
+
+            if provider and "action" in provider.arrays:
+                actions.append(provider.arrays["action"].tolist())
 
             # Update reference state
             quat = sim._data.sensor("imu_site_quat").data
@@ -203,12 +210,9 @@ async def run_episode(
     _plot_xy_trajectory(ref_x, ref_y, act_x, act_y, outdir, run_meta)
 
     # convert to Python lists only for plotting
-    plot_accel(time_acc, command_ax_body.tolist(), actual_ax_body.tolist(),
-               err_ax.tolist(), "x", outdir, run_meta)
-    plot_accel(time_acc, command_ay_body.tolist(), actual_ay_body.tolist(),
-               err_ay.tolist(), "y", outdir, run_meta)
-    plot_accel(time_acc, cmd_am.tolist(), act_am.tolist(),
-               err_am.tolist(), "mag", outdir, run_meta)
+    plot_accel(time_acc, command_ax_body.tolist(), actual_ax_body.tolist(), err_ax.tolist(), "x", outdir, run_meta)
+    plot_accel(time_acc, command_ay_body.tolist(), actual_ay_body.tolist(), err_ay.tolist(), "y", outdir, run_meta)
+    plot_accel(time_acc, cmd_am.tolist(), act_am.tolist(), err_am.tolist(), "mag", outdir, run_meta)
 
     # heading & ω plots
     yaw_ref_l, yaw_act_l, yaw_err_l = yaw_ref_u.tolist(), yaw_act_u.tolist(), yaw_err.tolist()
@@ -216,6 +220,10 @@ async def run_episode(
 
     plot_heading(time_s, yaw_ref_l, yaw_act_l, yaw_err_l, outdir, run_meta)
     plot_omega(time_omega, cmd_omega[:-1], act_omega_l, err_omega_l, outdir, run_meta)
+
+    if actions:
+        joint_names = load_joint_names(run_info["kinfer_file"])
+        plot_actions(time_s, actions, joint_names, outdir, run_meta)
 
     # Velocity errors
     mae_vx = float(np.mean(np.abs(error_vx_body)))
