@@ -42,7 +42,7 @@ def default_sim(
     meta: RobotURDFMetadataOutput,
     *,
     dt: float = 1e-4,
-    render: bool = True,
+    render: bool = False,
 ) -> MujocoSimulator:
     return MujocoSimulator(
         model_path=mjcf,
@@ -59,6 +59,7 @@ async def load_sim_and_runner(
     cmd_factory: CommandFactory,
     *,
     make_sim: Callable[..., MujocoSimulator] = default_sim,
+    **sim_kwargs,
 ) -> tuple[MujocoSimulator, PyModelRunner, ModelProvider]:
     """Shared download + construction logic."""
     async with K() as api:
@@ -68,7 +69,7 @@ async def load_sim_and_runner(
         )
 
     mjcf = find_mjcf(model_dir)
-    sim = make_sim(mjcf, meta)
+    sim = make_sim(mjcf, meta, **sim_kwargs)
     provider = ModelProvider(sim, keyboard_state=cmd_factory())
     runner = PyModelRunner(str(kinfer), provider)
     return sim, runner, provider

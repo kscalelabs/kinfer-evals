@@ -12,10 +12,12 @@ import numpy as np
 from kinfer.rust_bindings import PyModelRunner
 from kinfer_sim.provider import ModelProvider
 from kinfer_sim.simulator import MujocoSimulator
+from kmv.utils.logging import VideoWriter
+from kmv.app.viewer import DefaultMujocoViewer
 from tabulate import tabulate
 
 from kinfer_evals.core.eval_types import PrecomputedInputState, RunArgs
-from kinfer_evals.core.eval_utils import get_yaw_from_quaternion, load_sim_and_runner
+from kinfer_evals.core.eval_utils import get_yaw_from_quaternion, load_sim_and_runner, default_sim
 from kinfer_evals.core.plots import (
     _plot_xy_trajectory,
     plot_accel,
@@ -40,9 +42,23 @@ async def run_episode(
     outdir: Path,
     provider: ModelProvider | None = None,
     run_info: dict | None = None,
+    *,
+    record_video: bool = True,
 ) -> list[Mapping[str, object]]:
-    """Physics → inference → actuation loop + reference-error logging & plots."""
+    """Physics → inference → actuation loop, plots and optional video."""
     tracker = ReferenceStateTracker()
+
+    outdir.mkdir(parents=True, exist_ok=True)
+    
+    video_writer = None
+    decim = 1
+
+    if record_video and isinstance(sim._viewer, DefaultMujocoViewer):
+        fps_target = 30
+        decim = max(1, int(round(sim._control_frequency / fps_target)))
+        video_writer = VideoWriter(outdir / "video.mp4", fps=fps_target)
+    elif record_video and not isinstance(sim._viewer, DefaultMujocoViewer):
+        logger.warning("Cannot record video: QtViewer is active; run without --render")
 
     # metrics we collect every control tick
     time_s: list[float] = []
@@ -128,12 +144,18 @@ async def run_episode(
             act_x.append(float(sim._data.qpos[0]))
             act_y.append(float(sim._data.qpos[1]))
 
+            # If saving video, append a frame
+            if video_writer and len(time_s) % decim == 0:
+                video_writer.append(sim.read_pixels())
+
             # keep logging the sim state
             log.append(sim.get_state().as_dict())
             await asyncio.sleep(0)
 
     finally:
         await sim.close()
+        if video_writer:
+            video_writer.close()
 
     # Track acceleration
     dt = dt_ctrl
@@ -309,10 +331,12 @@ async def run_eval(
     • wrap it in PrecomputedInputState
     • run the episode & save artefacts
     """
+    
     sim, runner, provider = await load_sim_and_runner(
         args.kinfer,
         args.robot,
         cmd_factory=lambda: PrecomputedInputState([[0.0, 0.0, 0.0]]),
+        render=args.render,
     )
 
     freq = sim._control_frequency
@@ -327,5 +351,13 @@ async def run_eval(
     # Save & keep run metadata
     run_info = build_run_info(args, timestamp, outdir, duration_seconds)
 
-    log = await run_episode(sim, runner, duration_seconds, outdir, provider, run_info)
+    log = await run_episode(
+        sim,
+        runner,
+        duration_seconds,
+        outdir,
+        provider,
+        run_info,
+        record_video=not args.render,     # ← explicit toggle
+    )
     save_json(log, outdir, f"{eval_name}_log.json")

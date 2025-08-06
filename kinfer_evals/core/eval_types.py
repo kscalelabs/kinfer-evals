@@ -13,6 +13,7 @@ class RunArgs:
     kinfer: Path
     robot: str
     out: Path
+    render: bool = False
 
 
 class CommandFactory(Protocol):
