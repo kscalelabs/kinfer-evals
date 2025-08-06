@@ -1,6 +1,7 @@
 
 import os
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from typing import Any, Mapping, Sequence
 import mimetypes, pathlib, requests, uuid
 
@@ -62,8 +63,12 @@ def ensure_columns(notion: Client, db_id: str, data: dict[str, Any]) -> None:
     for key, value in data.items():
         if key in existing:
             continue
-        # Heuristic: numbers → Number column, everything else → Rich text
-        if isinstance(value, (int, float)):
+
+        # Submitted timestamp
+        if key == "submitted":
+            additions[key] = {"date": {}}
+
+        elif isinstance(value, (int, float)):
             additions[key] = {"number": {"format": "number"}}
         else:
             additions[key] = {"rich_text": {}}
@@ -91,8 +96,17 @@ def push_summary(
 
     notion = _client()
     
+    try:
+        stamp = datetime.fromisoformat(summary["timestamp"])
+    except ValueError:
+        stamp = datetime.strptime(summary["timestamp"], "%Y%m%d-%H%M%S")
+
+    # Attach the California tzinfo (PST/PDT will be handled automatically)
+    stamp_ca = stamp.replace(tzinfo=ZoneInfo("America/Los_Angeles"))
+    summary_with_submitted = {**summary, "submitted": stamp_ca.isoformat()}
+    
     # Auto-create any missing columns first
-    ensure_columns(notion, DB_ID, summary)
+    ensure_columns(notion, DB_ID, summary_with_submitted)
     
     db_schema = notion.databases.retrieve(database_id=DB_ID)
     title_col = _title_prop_name(db_schema)
@@ -107,12 +121,14 @@ def push_summary(
         else:
             props[key] = {"rich_text": [{"text": {"content": str(val)}}]}
 
-    # Title (must be present)
-    stamp = datetime.fromisoformat(summary["timestamp"])
-    friendly_title = f"{summary['eval_name']}  {stamp:%Y-%m-%d %H:%M:%S}"
+
+    friendly_title = os.path.basename(str(summary["kinfer_file"]))
     props[title_col] = {
         "title": [{"text": {"content": friendly_title}}]
     }
+
+
+    props["submitted"] = {"date": {"start": stamp_ca.isoformat()}}
 
     page = notion.pages.create(parent={"database_id": DB_ID}, properties=props)
 
