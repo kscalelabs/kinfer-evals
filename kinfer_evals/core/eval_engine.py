@@ -3,7 +3,6 @@
 import asyncio
 import json
 import logging
-import time
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Mapping, Sequence
@@ -11,14 +10,19 @@ from typing import TYPE_CHECKING, Mapping, Sequence
 import numpy as np
 from kinfer.rust_bindings import PyModelRunner
 from kinfer_sim.provider import ModelProvider
+from kinfer_sim.server import load_joint_names
 from kinfer_sim.simulator import MujocoSimulator
+from kmv.app.viewer import DefaultMujocoViewer
+from kmv.utils.logging import VideoWriter
 from tabulate import tabulate
 
 from kinfer_evals.core.eval_types import PrecomputedInputState, RunArgs
 from kinfer_evals.core.eval_utils import get_yaw_from_quaternion, load_sim_and_runner
+from kinfer_evals.core.notion import push_summary
 from kinfer_evals.core.plots import (
     _plot_xy_trajectory,
     plot_accel,
+    plot_actions,
     plot_heading,
     plot_omega,
     plot_velocity,
@@ -38,9 +42,23 @@ async def run_episode(
     outdir: Path,
     provider: ModelProvider | None = None,
     run_info: dict | None = None,
+    *,
+    record_video: bool = True,
 ) -> list[Mapping[str, object]]:
-    """Physics → inference → actuation loop + reference-error logging & plots."""
+    """Physics → inference → actuation loop, plots and optional video."""
     tracker = ReferenceStateTracker()
+
+    outdir.mkdir(parents=True, exist_ok=True)
+
+    video_writer = None
+    decim = 1
+
+    if record_video and isinstance(sim._viewer, DefaultMujocoViewer):
+        fps_target = 30
+        decim = max(1, int(round(sim._control_frequency / fps_target)))
+        video_writer = VideoWriter(outdir / "video.mp4", fps=fps_target)
+    elif record_video and not isinstance(sim._viewer, DefaultMujocoViewer):
+        logger.warning("Cannot record video: QtViewer is active; run without --render")
 
     # metrics we collect every control tick
     time_s: list[float] = []
@@ -53,6 +71,8 @@ async def run_episode(
 
     error_vx_body: list[float] = []
     error_vy_body: list[float] = []
+
+    actions: list[list[float]] = []
 
     # yaw / ω
     yaw_ref: list[float] = []
@@ -69,11 +89,14 @@ async def run_episode(
     yaw0 = get_yaw_from_quaternion(quat0)
     tracker.reset(tuple(sim._data.qpos[:2]), yaw=yaw0)
 
-    carry, log, t0 = runner.init(), [], time.time()
+    carry, log = runner.init(), []
     dt_ctrl = 1.0 / sim._control_frequency
 
+    n_ctrl_steps = int(round(seconds * sim._control_frequency))
+    step_idx = 0
+
     try:
-        while time.time() - t0 < seconds:
+        while step_idx < n_ctrl_steps:
             # Step physics
             for _ in range(sim.sim_decimation):
                 await sim.step()
@@ -90,6 +113,9 @@ async def run_episode(
             # Inference
             out, carry = runner.step(carry)
             runner.take_action(out)
+
+            if provider and "action" in provider.arrays:
+                actions.append(provider.arrays["action"].tolist())
 
             # Update reference state
             quat = sim._data.sensor("imu_site_quat").data
@@ -126,12 +152,20 @@ async def run_episode(
             act_x.append(float(sim._data.qpos[0]))
             act_y.append(float(sim._data.qpos[1]))
 
+            # If saving video, append a frame
+            if video_writer and len(time_s) % decim == 0:
+                video_writer.append(sim.read_pixels())
+
             # keep logging the sim state
             log.append(sim.get_state().as_dict())
             await asyncio.sleep(0)
 
+            step_idx += 1
+
     finally:
         await sim.close()
+        if video_writer:
+            video_writer.close()
 
     # Track acceleration
     dt = dt_ctrl
@@ -175,14 +209,10 @@ async def run_episode(
 
     _plot_xy_trajectory(ref_x, ref_y, act_x, act_y, outdir, run_meta)
 
-    cmd_ax_l, cmd_ay_l = command_ax_body.tolist(), command_ay_body.tolist()
-    act_ax_l, act_ay_l = actual_ax_body.tolist(), actual_ay_body.tolist()
-    err_ax_l, err_ay_l = err_ax.tolist(), err_ay.tolist()
-    cmd_am_l, act_am_l, err_am_l = cmd_am.tolist(), act_am.tolist(), err_am.tolist()
-
-    plot_accel(time_acc, cmd_ax_l, act_ax_l, err_ax_l, "x", outdir, run_meta)
-    plot_accel(time_acc, cmd_ay_l, act_ay_l, err_ay_l, "y", outdir, run_meta)
-    plot_accel(time_acc, cmd_am_l, act_am_l, err_am_l, "mag", outdir, run_meta)
+    # convert to Python lists only for plotting
+    plot_accel(time_acc, command_ax_body.tolist(), actual_ax_body.tolist(), err_ax.tolist(), "x", outdir, run_meta)
+    plot_accel(time_acc, command_ay_body.tolist(), actual_ay_body.tolist(), err_ay.tolist(), "y", outdir, run_meta)
+    plot_accel(time_acc, cmd_am.tolist(), act_am.tolist(), err_am.tolist(), "mag", outdir, run_meta)
 
     # heading & ω plots
     yaw_ref_l, yaw_act_l, yaw_err_l = yaw_ref_u.tolist(), yaw_act_u.tolist(), yaw_err.tolist()
@@ -190,6 +220,10 @@ async def run_episode(
 
     plot_heading(time_s, yaw_ref_l, yaw_act_l, yaw_err_l, outdir, run_meta)
     plot_omega(time_omega, cmd_omega[:-1], act_omega_l, err_omega_l, outdir, run_meta)
+
+    if actions:
+        joint_names = load_joint_names(run_info["kinfer_file"])
+        plot_actions(time_s, actions, joint_names, outdir, run_meta)
 
     # Velocity errors
     mae_vx = float(np.mean(np.abs(error_vx_body)))
@@ -265,6 +299,14 @@ async def run_episode(
     (outdir / "run_summary.json").write_text(json.dumps(combined, indent=2))
     logger.info("Saved combined summary to %s", outdir / "run_summary.json")
 
+    try:
+        vid = outdir / "video.mp4"
+        artefacts = ([vid] if vid.exists() else []) + sorted(outdir.glob("*.png"))
+        url = push_summary(combined, artefacts)
+        logger.info("Logged run to Notion: %s", url)
+    except Exception as exc:
+        logger.warning("Failed to push results to Notion: %s", exc)
+
     return log
 
 
@@ -304,6 +346,8 @@ async def run_eval(
         args.kinfer,
         args.robot,
         cmd_factory=lambda: PrecomputedInputState([[0.0, 0.0, 0.0]]),
+        render=args.render,
+        free_camera=False,
     )
 
     freq = sim._control_frequency
@@ -318,5 +362,13 @@ async def run_eval(
     # Save & keep run metadata
     run_info = build_run_info(args, timestamp, outdir, duration_seconds)
 
-    log = await run_episode(sim, runner, duration_seconds, outdir, provider, run_info)
+    log = await run_episode(
+        sim,
+        runner,
+        duration_seconds,
+        outdir,
+        provider,
+        run_info,
+        record_video=not args.render,
+    )
     save_json(log, outdir, f"{eval_name}_log.json")
