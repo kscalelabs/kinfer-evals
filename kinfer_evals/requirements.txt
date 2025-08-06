@@ -6,3 +6,4 @@ colorlogging
 tabulate
 
 notion-client
+h5py

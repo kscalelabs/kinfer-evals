@@ -18,8 +18,8 @@ from tabulate import tabulate
 
 from kinfer_evals.core.eval_types import PrecomputedInputState, RunArgs
 from kinfer_evals.core.eval_utils import get_yaw_from_quaternion, load_sim_and_runner
-from kinfer_evals.core.notion import push_summary
-from kinfer_evals.core.plots import (
+from kinfer_evals.publishers.notion import push_summary
+from kinfer_evals.artefacts.plots import (
     _plot_xy_trajectory,
     plot_accel,
     plot_actions,
