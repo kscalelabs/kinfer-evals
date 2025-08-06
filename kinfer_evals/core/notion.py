@@ -105,7 +105,7 @@ def push_summary(
     ts_raw = str(summary["timestamp"])
     try:
         stamp = datetime.fromisoformat(ts_raw)
-    except ValueError:  # fallback for legacy "YYYYmmdd-HHMMSS"
+    except ValueError:
         stamp = datetime.strptime(ts_raw, "%Y%m%d-%H%M%S")
 
     # Correct timezone to PST/PDT
