@@ -162,13 +162,16 @@ async def run_episode(
 
     # Track acceleration
     dt = dt_ctrl
-    command_ax_body = (np.diff(command_vx_body) / dt).tolist()
-    command_ay_body = (np.diff(command_vy_body) / dt).tolist()
-    actual_ax_body = (np.diff(actual_vx_body) / dt).tolist()
-    actual_ay_body = (np.diff(actual_vy_body) / dt).tolist()
+    command_ax_body = np.diff(command_vx_body) / dt
+    command_ay_body = np.diff(command_vy_body) / dt
+    actual_ax_body = np.diff(actual_vx_body) / dt
+    actual_ay_body = np.diff(actual_vy_body) / dt
 
     # time stamps shortened by one sample
     time_acc = time_s[1:]
+
+    err_ax = actual_ax_body - command_ax_body
+    err_ay = actual_ay_body - command_ay_body
 
     # total (magnitude) acceleration
     cmd_am = np.sqrt(command_ax_body**2 + command_ay_body**2)
@@ -199,13 +202,13 @@ async def run_episode(
 
     _plot_xy_trajectory(ref_x, ref_y, act_x, act_y, outdir, run_meta)
 
-    err_ax = actual_ax_body - command_ax_body
-    err_ay = actual_ay_body - command_ay_body
-    cmd_am_l, act_am_l, err_am_l = cmd_am.tolist(), act_am.tolist(), err_am.tolist()
-
-    plot_accel(time_acc, command_ax_body, actual_ax_body, err_ax, "x", outdir, run_meta)
-    plot_accel(time_acc, command_ay_body, actual_ay_body, err_ay, "y", outdir, run_meta)
-    plot_accel(time_acc, cmd_am_l, act_am_l, err_am_l, "mag", outdir, run_meta)
+    # convert to Python lists only for plotting
+    plot_accel(time_acc, command_ax_body.tolist(), actual_ax_body.tolist(),
+               err_ax.tolist(), "x", outdir, run_meta)
+    plot_accel(time_acc, command_ay_body.tolist(), actual_ay_body.tolist(),
+               err_ay.tolist(), "y", outdir, run_meta)
+    plot_accel(time_acc, cmd_am.tolist(), act_am.tolist(),
+               err_am.tolist(), "mag", outdir, run_meta)
 
     # heading & ω plots
     yaw_ref_l, yaw_act_l, yaw_err_l = yaw_ref_u.tolist(), yaw_act_u.tolist(), yaw_err.tolist()
