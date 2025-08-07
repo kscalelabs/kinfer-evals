@@ -5,7 +5,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from kinfer.rust_bindings import PyModelRunner
 from kinfer_sim.provider import ModelProvider
@@ -167,7 +167,7 @@ async def run_eval(
         "outdir": str(outdir.absolute()),
     }
 
-    summary = metrics.run(outdir / "episode.h5", outdir, run_meta)
+    summary = metrics.run(outdir / "episode.h5", outdir, cast(dict[str, object], run_meta))
 
     # Save combined summary
     combined = {**run_info, **summary}

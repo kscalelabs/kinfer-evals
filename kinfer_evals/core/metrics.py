@@ -2,6 +2,7 @@
 
 import logging
 from pathlib import Path
+from typing import cast
 
 import h5py
 import numpy as np
@@ -148,24 +149,24 @@ def run(h5: Path, outdir: Path, run_meta: dict[str, object]) -> dict[str, float]
         "omega_samples": int(len(err_om)),
     }
 
-    time_s = t
-    plot_velocity(time_s, cmd_vx, vx_b, err_vx, "x", plots_dir, run_meta)
-    plot_velocity(time_s, cmd_vy, vy_b, err_vy, "y", plots_dir, run_meta)
+    time_s = t.tolist()  # list[float] → satisfies Sequence[float]
+    plot_velocity(time_s, cmd_vx.tolist(), vx_b.tolist(), err_vx.tolist(), "x", plots_dir, run_meta)
+    plot_velocity(time_s, cmd_vy.tolist(), vy_b.tolist(), err_vy.tolist(), "y", plots_dir, run_meta)
 
-    plot_accel(time_s[1:], cmd_ax, ax_b, err_ax, "x", plots_dir, run_meta)
-    plot_accel(time_s[1:], cmd_ay, ay_b, err_ay, "y", plots_dir, run_meta)
-    plot_accel(time_s[1:], cmd_am, act_am, err_am, "mag", plots_dir, run_meta)
+    plot_accel(time_s[1:], cmd_ax.tolist(), ax_b.tolist(), err_ax.tolist(), "x", plots_dir, run_meta)
+    plot_accel(time_s[1:], cmd_ay.tolist(), ay_b.tolist(), err_ay.tolist(), "y", plots_dir, run_meta)
+    plot_accel(time_s[1:], cmd_am.tolist(), act_am.tolist(), err_am.tolist(), "mag", plots_dir, run_meta)
 
-    plot_heading(time_s, ref_yaw, yaw_series_u, yaw_err, plots_dir, run_meta)
-    plot_omega(time_s[1:], cmd_omega[:-1], act_omega, err_om, plots_dir, run_meta)
+    plot_heading(time_s, ref_yaw.tolist(), yaw_series_u.tolist(), yaw_err.tolist(), plots_dir, run_meta)
+    plot_omega(time_s[1:], cmd_omega[:-1].tolist(), act_omega.tolist(), err_om.tolist(), plots_dir, run_meta)
 
     # ----------- action plot --------------------------------------- #
     if actions is not None:
         try:
-            joint_names = load_joint_names(Path(run_meta["kinfer"]))
+            joint_names = load_joint_names(Path(cast(str, run_meta["kinfer"])))
         except Exception:
             joint_names = [f"joint_{i}" for i in range(actions.shape[1])]
-        plot_actions(time_s, actions, joint_names, plots_dir, run_meta)
+        plot_actions(time_s, actions.tolist(), joint_names, plots_dir, run_meta)
 
     # ----------- contact plots ---------------------------------------- #
     from kinfer_evals.artifacts.plots import (
@@ -173,17 +174,17 @@ def run(h5: Path, outdir: Path, run_meta: dict[str, object]) -> dict[str, float]
         plot_contact_force_mag,
     )
 
-    plot_contact_count(time_s, ncon, plots_dir, run_meta)
-    plot_contact_force_mag(time_s, fmag, plots_dir, run_meta)
+    plot_contact_count(time_s, ncon.tolist(), plots_dir, run_meta)
+    plot_contact_force_mag(time_s, fmag.tolist(), plots_dir, run_meta)
 
     # per-body contact-force lines
     plot_contact_force_per_body(time_s, per_body, body_names, plots_dir, run_meta)
 
-    _plot_xy_trajectory(ref_x, ref_y, qpos[:, 0], qpos[:, 1], plots_dir, run_meta)
+    _plot_xy_trajectory(ref_x, ref_y, qpos[:, 0].tolist(), qpos[:, 1].tolist(), plots_dir, run_meta)
 
     # ----------------- additional policy-input plots ------------------ #
     try:
-        joint_names_full = load_joint_names(Path(run_meta["kinfer"]))
+        joint_names_full = load_joint_names(Path(cast(str, run_meta["kinfer"])))
     except Exception:
         logger.warning("Failed to load joint names from %s", run_meta["kinfer"])
         joint_names_full = []

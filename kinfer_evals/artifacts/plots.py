@@ -216,7 +216,7 @@ def _plot_xy_trajectory(
     act_x: Sequence[float],
     act_y: Sequence[float],
     outdir: Path,
-    run_info: dict[str, str],
+    run_info: dict[str, object],
 ) -> None:
     """Save a top-down plot comparing reference vs. actual XY trajectories.
 
