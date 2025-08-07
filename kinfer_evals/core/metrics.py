@@ -11,6 +11,7 @@ from kinfer_evals.artifacts.plots import (
     plot_heading,
     plot_omega,
     plot_velocity,
+    plot_contact_force_per_body,      # NEW
 )
 from kinfer_evals.core.eval_utils import get_yaw_from_quaternion
 from kinfer_evals.reference_state import ReferenceStateTracker
@@ -38,6 +39,25 @@ def run(h5: Path, outdir: Path, run_meta: dict[str, object]) -> dict[str, float]
         cmd_vel = f["cmd_vel"][:]  # (T, 3) - [vx, vy, omega]
         ncon = f["contact_count"][:]          # (T,)
         fmag = f["contact_force_mag"][:]      # (T,)
+        # -------- per-body contact forces --------------------------- #
+        body_names = [
+            n.decode() if isinstance(n, bytes) else str(n)
+            for n in f["body_names"][:]
+        ]
+        contact_body = f["contact_body"][:]       # ragged
+        wrench_flat  = f["contact_wrench"][:]     # ragged
+
+    nb = len(body_names)
+    per_body = np.zeros((nb, len(t)), dtype=np.float32)   # (nb, T)
+    for step, (pairs, flat) in enumerate(zip(contact_body, wrench_flat)):
+        if pairs.size == 0:
+            continue
+        forces = flat.reshape(-1, 6)[:, :3]          # Fx,Fy,Fz
+        mags   = np.linalg.norm(forces, axis=1)      # |F|
+        ids    = pairs.reshape(-1, 2)                # (ncon,2)
+        for (a, b), mag in zip(ids, mags):
+            per_body[a, step] += mag
+            per_body[b, step] += mag
 
     dt = np.mean(np.diff(t))
 
@@ -133,6 +153,9 @@ def run(h5: Path, outdir: Path, run_meta: dict[str, object]) -> dict[str, float]
 
     plot_contact_count(time_s, ncon, outdir, run_meta)      # count
     plot_contact_force_mag(time_s, fmag, outdir, run_meta)          # Σ|F|
+
+    # per-body contact-force lines
+    plot_contact_force_per_body(time_s, per_body, body_names, outdir, run_meta)
 
     _plot_xy_trajectory(ref_x, ref_y, qpos[:, 0], qpos[:, 1], outdir, run_meta)
 
