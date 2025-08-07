@@ -31,6 +31,8 @@ def run(h5: Path, outdir: Path, run_meta: dict[str, object]) -> dict[str, float]
     Returns the numeric summary (to be merged with run_meta then json-dumped).
     """
     outdir.mkdir(parents=True, exist_ok=True)
+    plots_dir = outdir / "plots"
+    plots_dir.mkdir(parents=True, exist_ok=True)
 
     with h5py.File(h5, "r") as f:
         t = f["time"][:]  # (T,)
@@ -132,18 +134,16 @@ def run(h5: Path, outdir: Path, run_meta: dict[str, object]) -> dict[str, float]
         "omega_samples": int(len(err_om)),
     }
 
-    # ------------ plots -------------------------------------------------- #
     time_s = t
-    plot_velocity(time_s, cmd_vx, vx_b, err_vx, "x", outdir, run_meta)
-    plot_velocity(time_s, cmd_vy, vy_b, err_vy, "y", outdir, run_meta)
+    plot_velocity(time_s, cmd_vx, vx_b, err_vx, "x", plots_dir, run_meta)
+    plot_velocity(time_s, cmd_vy, vy_b, err_vy, "y", plots_dir, run_meta)
 
-    plot_accel(time_s[1:], cmd_ax, ax_b, err_ax, "x", outdir, run_meta)
-    plot_accel(time_s[1:], cmd_ay, ay_b, err_ay, "y", outdir, run_meta)
-    plot_accel(time_s[1:], cmd_am, act_am, err_am, "mag", outdir, run_meta)
+    plot_accel(time_s[1:], cmd_ax, ax_b, err_ax, "x", plots_dir, run_meta)
+    plot_accel(time_s[1:], cmd_ay, ay_b, err_ay, "y", plots_dir, run_meta)
+    plot_accel(time_s[1:], cmd_am, act_am, err_am, "mag", plots_dir, run_meta)
 
-    # ----------- plots ------------------------------------------------- #
-    plot_heading(time_s, ref_yaw, yaw_series_u, yaw_err, outdir, run_meta)
-    plot_omega(time_s[1:], cmd_omega[:-1], act_omega, err_om, outdir, run_meta)
+    plot_heading(time_s, ref_yaw, yaw_series_u, yaw_err, plots_dir, run_meta)
+    plot_omega(time_s[1:], cmd_omega[:-1], act_omega, err_om, plots_dir, run_meta)
 
     # ----------- contact plots ---------------------------------------- #
     from kinfer_evals.artifacts.plots import (
@@ -151,12 +151,12 @@ def run(h5: Path, outdir: Path, run_meta: dict[str, object]) -> dict[str, float]
         plot_contact_force_mag,
     )
 
-    plot_contact_count(time_s, ncon, outdir, run_meta)      # count
-    plot_contact_force_mag(time_s, fmag, outdir, run_meta)          # Σ|F|
+    plot_contact_count(time_s, ncon, plots_dir, run_meta)
+    plot_contact_force_mag(time_s, fmag, plots_dir, run_meta)
 
     # per-body contact-force lines
-    plot_contact_force_per_body(time_s, per_body, body_names, outdir, run_meta)
+    plot_contact_force_per_body(time_s, per_body, body_names, plots_dir, run_meta)
 
-    _plot_xy_trajectory(ref_x, ref_y, qpos[:, 0], qpos[:, 1], outdir, run_meta)
+    _plot_xy_trajectory(ref_x, ref_y, qpos[:, 0], qpos[:, 1], plots_dir, run_meta)
 
     return summary
