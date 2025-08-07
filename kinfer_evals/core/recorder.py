@@ -49,8 +49,8 @@ class Recorder:
             compression=compress,
             compression_opts=lvl,
         )
-        self.ncon = _ds("contact_count", (), dtype="i2")          # #contacts/step
-        self.fmag = _ds("contact_force_mag", (), dtype="f4")      # Σ|F| per step
+        self.ncon = _ds("contact_count", (), dtype="i2")  # #contacts/step
+        self.fmag = _ds("contact_force_mag", (), dtype="f4")  # Σ|F| per step
 
         vlen_i2 = h5py.vlen_dtype(np.dtype("i2"))
         self.cbody = self._f.create_dataset(
@@ -67,10 +67,7 @@ class Recorder:
 
         str_t = h5py.string_dtype(encoding="utf-8")
         self.body_names = self._f.create_dataset("body_names", (nb,), dtype=str_t)
-        names = [
-            mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, i) or f"body_{i}"
-            for i in range(nb)
-        ]
+        names = [mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, i) or f"body_{i}" for i in range(nb)]
         self.body_names[:] = names
 
     # ------- public API -------------------------------------------------- #
@@ -102,9 +99,9 @@ class Recorder:
             body_a = self._model.geom_bodyid[con.geom1]
             body_b = self._model.geom_bodyid[con.geom2]
 
-            bodies.extend([body_a, body_b])        # store both ids
+            bodies.extend([body_a, body_b])  # store both ids
 
-            mag = float(np.linalg.norm(cf[:3]))    # |F| of this contact
+            mag = float(np.linalg.norm(cf[:3]))  # |F| of this contact
             # ⬇︎ credit the magnitude to *both* bodies, including world (id 0)
             self._force_per_body[body_a] += mag
             self._force_per_body[body_b] += mag
@@ -123,8 +120,8 @@ class Recorder:
         self.ncon[s] = data.ncon
 
         total_f = 0.0
-        if frames:                                    # frames = [(6,), …]
-            forces = np.asarray(frames, dtype=np.float32)[:, :3]   # Fx Fy Fz
+        if frames:  # frames = [(6,), …]
+            forces = np.asarray(frames, dtype=np.float32)[:, :3]  # Fx Fy Fz
             total_f = float(np.linalg.norm(forces, axis=1).sum())  # Σ|F|
         self.fmag.resize(self._i + 1, axis=0)
         self.fmag[s] = total_f
@@ -135,7 +132,7 @@ class Recorder:
         # write final per-body aggregate before closing the file
         self._f.create_dataset(
             "force_per_body",
-            data=self._force_per_body.astype("f4"),   # (nbody,)  float32
+            data=self._force_per_body.astype("f4"),  # (nbody,)  float32
             dtype="f4",
         )
         self._f.close()

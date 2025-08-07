@@ -93,7 +93,6 @@ async def run_episode(
         rec.close()
 
 
-
 def build_run_info(args: RunArgs, timestamp: str, outdir: Path, duration_seconds: float) -> dict:
     """Save metadata about this run for tracking purposes."""
     run_info = {

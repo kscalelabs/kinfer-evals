@@ -8,10 +8,10 @@ import numpy as np
 from kinfer_evals.artifacts.plots import (
     _plot_xy_trajectory,
     plot_accel,
+    plot_contact_force_per_body,  # NEW
     plot_heading,
     plot_omega,
     plot_velocity,
-    plot_contact_force_per_body,      # NEW
 )
 from kinfer_evals.core.eval_utils import get_yaw_from_quaternion
 from kinfer_evals.reference_state import ReferenceStateTracker
@@ -39,24 +39,21 @@ def run(h5: Path, outdir: Path, run_meta: dict[str, object]) -> dict[str, float]
         qpos = f["qpos"][:]  # (T, nq)
         qvel = f["qvel"][:]  # (T, nv)
         cmd_vel = f["cmd_vel"][:]  # (T, 3) - [vx, vy, omega]
-        ncon = f["contact_count"][:]          # (T,)
-        fmag = f["contact_force_mag"][:]      # (T,)
+        ncon = f["contact_count"][:]  # (T,)
+        fmag = f["contact_force_mag"][:]  # (T,)
         # -------- per-body contact forces --------------------------- #
-        body_names = [
-            n.decode() if isinstance(n, bytes) else str(n)
-            for n in f["body_names"][:]
-        ]
-        contact_body = f["contact_body"][:]       # ragged
-        wrench_flat  = f["contact_wrench"][:]     # ragged
+        body_names = [n.decode() if isinstance(n, bytes) else str(n) for n in f["body_names"][:]]
+        contact_body = f["contact_body"][:]  # ragged
+        wrench_flat = f["contact_wrench"][:]  # ragged
 
     nb = len(body_names)
-    per_body = np.zeros((nb, len(t)), dtype=np.float32)   # (nb, T)
+    per_body = np.zeros((nb, len(t)), dtype=np.float32)  # (nb, T)
     for step, (pairs, flat) in enumerate(zip(contact_body, wrench_flat)):
         if pairs.size == 0:
             continue
-        forces = flat.reshape(-1, 6)[:, :3]          # Fx,Fy,Fz
-        mags   = np.linalg.norm(forces, axis=1)      # |F|
-        ids    = pairs.reshape(-1, 2)                # (ncon,2)
+        forces = flat.reshape(-1, 6)[:, :3]  # Fx,Fy,Fz
+        mags = np.linalg.norm(forces, axis=1)  # |F|
+        ids = pairs.reshape(-1, 2)  # (ncon,2)
         for (a, b), mag in zip(ids, mags):
             per_body[a, step] += mag
             per_body[b, step] += mag

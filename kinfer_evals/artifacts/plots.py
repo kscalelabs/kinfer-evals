@@ -299,11 +299,12 @@ def _plot_xy_trajectory(
 
 # -------- Contact utility plots ------------------------------------ #
 
+
 def _make_single_axis_fig() -> tuple["plt.Figure", "plt.Axes"]:
     import matplotlib.pyplot as plt
 
     fig, ax = plt.subplots(figsize=(7, 4))
-    fig.tight_layout(rect=(0, 0.20, 1, 1))   # footer strip
+    fig.tight_layout(rect=(0, 0.20, 1, 1))  # footer strip
     return fig, ax
 
 
@@ -347,29 +348,28 @@ def plot_contact_force_mag(
     plt.close(fig)
 
 
-
 def _safe_fname(name: str) -> str:
     """Return *name* that is safe as a filename (spaces→_, slash→- …)."""
-    import re, unicodedata
+    import re
+    import unicodedata
 
     t = unicodedata.normalize("NFKD", name)
-    t = re.sub(r"[\\/:*?\"<>|]", "-", t)   # Windows-safe
-    t = re.sub(r"\s+", "_", t)             # spaces → _
+    t = re.sub(r"[\\/:*?\"<>|]", "-", t)  # Windows-safe
+    t = re.sub(r"\s+", "_", t)  # spaces → _
     return t
 
 
 def plot_contact_force_per_body(
     time_s: Sequence[float],
-    per_body: "np.ndarray",        # shape (nbodies, T)
+    per_body: "np.ndarray",  # shape (nbodies, T)
     body_names: Sequence[str],
     outdir: Path,
     info: dict[str, object],
 ) -> None:
     """Plot |F| time-series:
-        • one combined figure (all non-zero bodies)
-        • one figure per body with any non-zero force
+    • one combined figure (all non-zero bodies)
+    • one figure per body with any non-zero force
     """
-
     nz = [i for i in range(per_body.shape[0]) if np.any(per_body[i] > 0)]
     if not nz:
         return
