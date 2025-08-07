@@ -99,15 +99,15 @@ class Recorder:
             frames.append(cf.copy().astype(np.float32))  # cast to f32 for storage
 
             con = data.contact[j]
-            bodies.extend([
-                self._model.geom_bodyid[con.geom1],
-                self._model.geom_bodyid[con.geom2],
-            ])
-
             body_a = self._model.geom_bodyid[con.geom1]
             body_b = self._model.geom_bodyid[con.geom2]
-            body_id = body_b if body_a == 0 else body_a
-            self._force_per_body[body_id] += float(np.linalg.norm(cf[:3]))  # |F|
+
+            bodies.extend([body_a, body_b])        # store both ids
+
+            mag = float(np.linalg.norm(cf[:3]))    # |F| of this contact
+            # ⬇︎ credit the magnitude to *both* bodies, including world (id 0)
+            self._force_per_body[body_a] += mag
+            self._force_per_body[body_b] += mag
 
         # flatten (ncon,6) → (6*ncon,)  for storage; reader reshapes later
         flat = np.concatenate(frames).astype("f4") if frames else np.zeros(0, dtype="f4")
