@@ -1,23 +1,26 @@
 """Compute numeric metrics and plots from an episode.h5 file."""
 
+import logging
 from pathlib import Path
 
 import h5py
 import numpy as np
+from kinfer_sim.server import load_joint_names
 
 from kinfer_evals.artifacts.plots import (
     _plot_xy_trajectory,
     plot_accel,
+    plot_actions,
     plot_contact_force_per_body,
     plot_heading,
+    plot_input_series,
     plot_omega,
     plot_velocity,
-    plot_actions,
-    plot_input_series,
 )
-from kinfer_sim.server import load_joint_names
 from kinfer_evals.core.eval_utils import get_yaw_from_quaternion
 from kinfer_evals.reference_state import ReferenceStateTracker
+
+logger = logging.getLogger(__name__)
 
 
 def _body_frame_vel(qvel: np.ndarray, yaw_series: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -47,7 +50,7 @@ def run(h5: Path, outdir: Path, run_meta: dict[str, object]) -> dict[str, float]
         # -------- per-body contact forces --------------------------- #
         body_names = [n.decode() if isinstance(n, bytes) else str(n) for n in f["body_names"][:]]
         contact_body = f["contact_body"][:]  # ragged
-        wrench_flat = f["contact_wrench"][:]          # ragged
+        wrench_flat = f["contact_wrench"][:]  # ragged
         actions = f["action_target"][:] if "action_target" in f else None
 
         # Collect policy input datasets
@@ -55,7 +58,7 @@ def run(h5: Path, outdir: Path, run_meta: dict[str, object]) -> dict[str, float]
         input_keys = [k for k in f.keys() if k.startswith("input_")]
         for key in input_keys:
             name = key[6:]  # strip "input_"
-            vals = f[key][:]          # shape (T, N)  or (T,)
+            vals = f[key][:]  # shape (T, N)  or (T,)
             if vals.ndim == 1:
                 vals = vals[:, None]
             input_datasets[name] = vals
@@ -186,7 +189,7 @@ def run(h5: Path, outdir: Path, run_meta: dict[str, object]) -> dict[str, float]
         joint_names_full = []
 
     # explicit per-input component labels
-    LABELS: dict[str, list[str]] = {
+    input_labels: dict[str, list[str]] = {
         "command": ["x_vel", "y_vel", "z_ang_vel"],
         "gyroscope": ["x_ang_vel", "y_ang_vel", "z_ang_vel"],
         "projected_gravity": ["x", "y", "z"],
@@ -196,8 +199,8 @@ def run(h5: Path, outdir: Path, run_meta: dict[str, object]) -> dict[str, float]
         # ────────── label selection ────────── #
         if name in {"joint_angles", "joint_angular_velocities", "joint_velocities", "action"} and joint_names_full:
             labels = joint_names_full[: vals.shape[1]]
-        elif name in LABELS and len(LABELS[name]) == vals.shape[1]:
-            labels = LABELS[name]
+        elif name in input_labels and len(input_labels[name]) == vals.shape[1]:
+            labels = input_labels[name]
         else:
             labels = [f"{name}_{i}" for i in range(vals.shape[1])]
 

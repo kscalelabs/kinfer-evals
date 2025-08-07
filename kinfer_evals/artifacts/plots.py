@@ -366,7 +366,8 @@ def plot_contact_force_per_body(
     outdir: Path,
     info: dict[str, object],
 ) -> None:
-    """Plot |F| time-series:
+    """Plot |F| time-series.
+
     • one combined figure (all non-zero bodies)
     • one figure per body with any non-zero force
     """
@@ -402,7 +403,7 @@ def plot_contact_force_per_body(
 
 def plot_input_series(
     time_s: Sequence[float],
-    data: "np.ndarray",          # shape (T, N)
+    data: "np.ndarray",  # shape (T, N)
     labels: Sequence[str],
     name: str,
     outdir: Path,

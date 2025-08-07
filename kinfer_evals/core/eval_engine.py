@@ -177,10 +177,7 @@ async def run_eval(
     try:
         vid = outdir / "video.mp4"
         plots_dir = outdir / "plots"
-        artifacts = (
-            ([vid] if vid.exists() else [])
-            + (sorted(plots_dir.glob("*.png")) if plots_dir.exists() else [])
-        )
+        artifacts = ([vid] if vid.exists() else []) + (sorted(plots_dir.glob("*.png")) if plots_dir.exists() else [])
         url = push_summary(combined, artifacts)
         logger.info("Logged run to Notion: %s", url)
     except Exception as exc:
