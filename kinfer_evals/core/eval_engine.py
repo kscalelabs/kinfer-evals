@@ -7,27 +7,22 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Mapping, Sequence
 
-import numpy as np
 from kinfer.rust_bindings import PyModelRunner
 from kinfer_sim.provider import ModelProvider
-from kinfer_sim.server import load_joint_names
 from kinfer_sim.simulator import MujocoSimulator
 from kmv.app.viewer import DefaultMujocoViewer
 from kmv.utils.logging import VideoWriter
-from tabulate import tabulate
 
-from kinfer_evals.core.eval_types import PrecomputedInputState, RunArgs
-from kinfer_evals.core.eval_utils import get_yaw_from_quaternion, load_sim_and_runner
-from kinfer_evals.publishers.notion import push_summary
 from kinfer_evals.core import metrics
-
+from kinfer_evals.core.eval_types import PrecomputedInputState, RunArgs
+from kinfer_evals.core.eval_utils import load_sim_and_runner
 from kinfer_evals.core.recorder import Recorder
+from kinfer_evals.publishers.notion import push_summary
 
 if TYPE_CHECKING:
     from kinfer_evals.evals import CommandMaker
 
 logger = logging.getLogger(__name__)
-
 
 
 async def run_episode(
@@ -41,9 +36,8 @@ async def run_episode(
     record_video: bool = True,
 ) -> list[Mapping[str, object]]:
     """Physics → inference → actuation loop, plots and optional video."""
-    
     outdir.mkdir(parents=True, exist_ok=True)
-    
+
     rec = Recorder(outdir / "episode.h5", sim._model)
 
     video_writer = None
@@ -165,10 +159,10 @@ async def run_eval(
         run_info,
         record_video=not args.render,
     )
-    
+
     # Save debug log if needed
     save_debug_log(log, outdir, f"{eval_name}_debug_log.json")
-    
+
     # Run post-processing metrics
     run_meta = {
         "kinfer": str(args.kinfer.absolute()),
@@ -177,14 +171,14 @@ async def run_eval(
         "timestamp": timestamp,
         "outdir": str(outdir.absolute()),
     }
-    
+
     summary = metrics.run(outdir / "episode.h5", outdir, run_meta)
-    
+
     # Save combined summary
     combined = {**run_info, **summary}
     (outdir / "run_summary.json").write_text(json.dumps(combined, indent=2))
     logger.info("Saved combined summary to %s", outdir / "run_summary.json")
-    
+
     try:
         vid = outdir / "video.mp4"
         artifacts = ([vid] if vid.exists() else []) + sorted(outdir.glob("*.png"))

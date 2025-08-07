@@ -1,44 +1,48 @@
 """Compute numeric metrics and plots from an episode.h5 file."""
 
 from pathlib import Path
-import json, numpy as np, h5py
+
+import h5py
+import numpy as np
+
 from kinfer_evals.artifacts.plots import (
-    plot_velocity, plot_accel, plot_heading, plot_omega,
-    plot_actions, _plot_xy_trajectory
+    _plot_xy_trajectory,
+    plot_accel,
+    plot_heading,
+    plot_omega,
+    plot_velocity,
 )
-from tabulate import tabulate
-from kinfer_evals.reference_state import ReferenceStateTracker
 from kinfer_evals.core.eval_utils import get_yaw_from_quaternion
+from kinfer_evals.reference_state import ReferenceStateTracker
+
 
 def _body_frame_vel(qvel: np.ndarray, yaw_series: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    vx_w, vy_w = qvel[:,0], qvel[:,1]
+    vx_w, vy_w = qvel[:, 0], qvel[:, 1]
     c, s = np.cos(yaw_series), np.sin(yaw_series)
-    vx_b =  c * vx_w + s * vy_w
+    vx_b = c * vx_w + s * vy_w
     vy_b = -s * vx_w + c * vy_w
     return vx_b, vy_b
 
+
 def run(h5: Path, outdir: Path, run_meta: dict[str, object]) -> dict[str, float]:
-    """
-    Post-process *h5* → plots + metrics.  
+    """Post-process *h5* → plots + metrics.
+
     Returns the numeric summary (to be merged with run_meta then json-dumped).
     """
     outdir.mkdir(parents=True, exist_ok=True)
 
     with h5py.File(h5, "r") as f:
-        t      = f["time"][:]               # (T,)
-        qpos   = f["qpos"][:]               # (T, nq)
-        qvel   = f["qvel"][:]               # (T, nv)
-        cmd_vel = f["cmd_vel"][:]           # (T, 3) - [vx, vy, omega]
+        t = f["time"][:]  # (T,)
+        qpos = f["qpos"][:]  # (T, nq)
+        qvel = f["qvel"][:]  # (T, nv)
+        cmd_vel = f["cmd_vel"][:]  # (T, 3) - [vx, vy, omega]
 
     dt = np.mean(np.diff(t))
-    freq = 1.0 / dt
-    
+
     # ---------- actual yaw, ω, body-frame velocity -------------------- #
     # MuJoCo free-joint qpos: [x y z  qw qx qy qz]
-    quat = qpos[:, 3:7]                       # (T,4)  (w,x,y,z)
-    yaw_series = np.array(
-        [get_yaw_from_quaternion(q) for q in quat], dtype=np.float32
-    )
+    quat = qpos[:, 3:7]  # (T,4)  (w,x,y,z)
+    yaw_series = np.array([get_yaw_from_quaternion(q) for q in quat], dtype=np.float32)
 
     vx_b, vy_b = _body_frame_vel(qvel, yaw_series)
 
@@ -46,7 +50,7 @@ def run(h5: Path, outdir: Path, run_meta: dict[str, object]) -> dict[str, float]
     cmd_vx = cmd_vel[:, 0]
     cmd_vy = cmd_vel[:, 1]
     cmd_omega = cmd_vel[:, 2]
-    
+
     err_vx = vx_b - cmd_vx
     err_vy = vy_b - cmd_vy
 
@@ -75,23 +79,34 @@ def run(h5: Path, outdir: Path, run_meta: dict[str, object]) -> dict[str, float]
     yaw_err = yaw_series_u - ref_yaw
 
     act_omega = np.diff(yaw_series_u) / dt
-    err_om    = act_omega - cmd_omega[:-1]
+    err_om = act_omega - cmd_omega[:-1]
 
     # ------------ numeric summary --------------------------------------- #
-    def mae(x):  return float(np.mean(np.abs(x)))
-    def rmse(x): return float(np.sqrt(np.mean(np.square(x))))
+    def mae(x: np.ndarray) -> float:
+        return float(np.mean(np.abs(x)))
+
+    def rmse(x: np.ndarray) -> float:
+        return float(np.sqrt(np.mean(np.square(x))))
 
     summary = {
         # velocity
-        "mae_vel_x": mae(err_vx), "mae_vel_y": mae(err_vy),
-        "rmse_vel_x": rmse(err_vx), "rmse_vel_y": rmse(err_vy),
+        "mae_vel_x": mae(err_vx),
+        "mae_vel_y": mae(err_vy),
+        "rmse_vel_x": rmse(err_vx),
+        "rmse_vel_y": rmse(err_vy),
         "vel_samples": int(len(err_vx)),
         # acceleration
-        "mae_accel_x": mae(err_ax), "mae_accel_y": mae(err_ay), "mae_accel_mag": mae(err_am),
-        "rmse_accel_x": rmse(err_ax), "rmse_accel_y": rmse(err_ay), "rmse_accel_mag": rmse(err_am),
+        "mae_accel_x": mae(err_ax),
+        "mae_accel_y": mae(err_ay),
+        "mae_accel_mag": mae(err_am),
+        "rmse_accel_x": rmse(err_ax),
+        "rmse_accel_y": rmse(err_ay),
+        "rmse_accel_mag": rmse(err_am),
         # heading / ω
-        "mae_heading": mae(yaw_err), "rmse_heading": rmse(yaw_err),
-        "mae_omega": mae(err_om),   "rmse_omega":  rmse(err_om),
+        "mae_heading": mae(yaw_err),
+        "rmse_heading": rmse(yaw_err),
+        "mae_omega": mae(err_om),
+        "rmse_omega": rmse(err_om),
         "omega_samples": int(len(err_om)),
     }
 
