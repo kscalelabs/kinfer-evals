@@ -13,6 +13,7 @@ from kinfer_evals.artifacts.plots import (
     plot_omega,
     plot_velocity,
     plot_actions,
+    plot_input_series,
 )
 from kinfer_sim.server import load_joint_names
 from kinfer_evals.core.eval_utils import get_yaw_from_quaternion
@@ -48,6 +49,16 @@ def run(h5: Path, outdir: Path, run_meta: dict[str, object]) -> dict[str, float]
         contact_body = f["contact_body"][:]  # ragged
         wrench_flat = f["contact_wrench"][:]          # ragged
         actions = f["action_target"][:] if "action_target" in f else None
+
+        # Collect policy input datasets
+        input_datasets = {}
+        input_keys = [k for k in f.keys() if k.startswith("input_")]
+        for key in input_keys:
+            name = key[6:]  # strip "input_"
+            vals = f[key][:]          # shape (T, N)  or (T,)
+            if vals.ndim == 1:
+                vals = vals[:, None]
+            input_datasets[name] = vals
 
     nb = len(body_names)
     per_body = np.zeros((nb, len(t)), dtype=np.float32)  # (nb, T)
@@ -166,5 +177,30 @@ def run(h5: Path, outdir: Path, run_meta: dict[str, object]) -> dict[str, float]
     plot_contact_force_per_body(time_s, per_body, body_names, plots_dir, run_meta)
 
     _plot_xy_trajectory(ref_x, ref_y, qpos[:, 0], qpos[:, 1], plots_dir, run_meta)
+
+    # ----------------- additional policy-input plots ------------------ #
+    try:
+        joint_names_full = load_joint_names(Path(run_meta["kinfer"]))
+    except Exception:
+        logger.warning("Failed to load joint names from %s", run_meta["kinfer"])
+        joint_names_full = []
+
+    # explicit per-input component labels
+    LABELS: dict[str, list[str]] = {
+        "command": ["x_vel", "y_vel", "z_ang_vel"],
+        "gyroscope": ["x_ang_vel", "y_ang_vel", "z_ang_vel"],
+        "projected_gravity": ["x", "y", "z"],
+    }
+
+    for name, vals in input_datasets.items():
+        # ────────── label selection ────────── #
+        if name in {"joint_angles", "joint_angular_velocities", "joint_velocities", "action"} and joint_names_full:
+            labels = joint_names_full[: vals.shape[1]]
+        elif name in LABELS and len(LABELS[name]) == vals.shape[1]:
+            labels = LABELS[name]
+        else:
+            labels = [f"{name}_{i}" for i in range(vals.shape[1])]
+
+        plot_input_series(time_s, vals, labels, name, plots_dir, run_meta)
 
     return summary

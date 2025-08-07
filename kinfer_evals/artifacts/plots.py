@@ -398,3 +398,27 @@ def plot_contact_force_per_body(
         fname = f"contact_force_{_safe_fname(body_names[i])}.png"
         fig.savefig(outdir / fname, dpi=150, bbox_inches="tight")
         plt.close(fig)
+
+
+def plot_input_series(
+    time_s: Sequence[float],
+    data: "np.ndarray",          # shape (T, N)
+    labels: Sequence[str],
+    name: str,
+    outdir: Path,
+    info: dict[str, object],
+) -> None:
+    """Plot each component of a policy-input vector on one figure."""
+    fig, ax = _make_single_axis_fig()
+
+    for i, lbl in enumerate(labels):
+        ax.plot(time_s, data[:, i], label=lbl, linewidth=1)
+
+    ax.set_xlabel("time [s]")
+    ax.set_title(f"Policy input – {name}")
+    ax.legend(loc="upper right", fontsize=7, ncol=min(4, len(labels)))
+
+    _add_footer(fig, info)
+    outdir.mkdir(parents=True, exist_ok=True)
+    fig.savefig(outdir / f"input_{name}.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)

@@ -80,12 +80,16 @@ async def run_episode(
             if video_writer and step_idx % decim == 0:
                 video_writer.append(sim.read_pixels())
 
-            # Record data including commands & NN actions
+            # Snapshot all policy inputs prepared by the provider
+            arrays_copy = {k: v.copy() for k, v in provider.arrays.items()} if provider else {}
+
+            # Record data including commands and inputs
             rec.append(
                 sim._data,
                 step_idx * dt_ctrl,
                 (cmd_vx_body, cmd_vy_body, cmd_omega),
                 out,
+                arrays_copy,
             )
             await asyncio.sleep(0)
 

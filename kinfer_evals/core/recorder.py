@@ -38,6 +38,14 @@ class Recorder:
         # (same ordering as `joint_names` in the model metadata)
         # ────────────────────────────────────────────────────────────────
         self.action_target = _ds("action_target", (nu,))
+
+        # lazy-created datasets for arbitrary policy inputs
+        self._input_dsets: dict[str, h5py.Dataset] = {}
+
+        # remember compression opts for later lazy datasets
+        self._compress = compress
+        self._compress_lvl = lvl
+
         self.cacc = _ds("cacc", (nb, 6))  # 6-D per body
 
         # Command data storage
@@ -82,6 +90,7 @@ class Recorder:
         t: float,
         cmd_vel: tuple[float, float, float],
         action: "np.ndarray",
+        inputs: dict[str, "np.ndarray"] | None = None,
     ) -> None:
         """Copy the current mjData into the datasets (O(#floats) memcpy)."""
         s = slice(self._i, self._i + 1)
@@ -98,6 +107,27 @@ class Recorder:
         ):
             d.resize(self._i + 1, axis=0)
             d[s] = arr
+
+        # ─────────── policy inputs ──────────── #
+        if inputs:
+            for name, arr in inputs.items():
+                ds_name = f"input_{name}"
+                flat = arr.astype(np.float32).ravel()
+                if ds_name not in self._input_dsets:
+                    self._input_dsets[ds_name] = self._f.create_dataset(
+                        ds_name,
+                        shape=(0, flat.shape[0]),
+                        maxshape=(None, flat.shape[0]),
+                        chunks=(_CHUNK, flat.shape[0]),
+                        dtype="f4",
+                        compression=self._compress,
+                        compression_opts=self._compress_lvl,
+                    )
+                ds = self._input_dsets[ds_name]
+                if ds.shape[1] != flat.shape[0]:
+                    raise ValueError(f"Input '{name}' size changed during recording")
+                ds.resize(self._i + 1, axis=0)
+                ds[s] = flat
 
         # ------- contact wrench (ragged) -------------------------------- #
         cf = np.empty(6, dtype=np.float64)  # mjtNum = float64
