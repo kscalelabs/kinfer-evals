@@ -1,5 +1,4 @@
 # src/kinfer_evals/core/recorder.py
-from __future__ import annotations
 from pathlib import Path
 import numpy as np, h5py, math
 import mujoco                               # → mj_contactForce API
@@ -33,6 +32,9 @@ class Recorder:
         self.act_frc  = _ds("act_force",   (nu,))
         self.cacc     = _ds("cacc",        (nb, 6))      # 6-D per body
         
+        # Command data storage
+        self.cmd_vel  = _ds("cmd_vel",     (3,))         # [vx, vy, omega]
+        
         # --- ragged contact wrench ------------------------------------ #
         vlen_f4 = h5py.vlen_dtype(np.dtype("f4"))        # VLEN float32
         self.wrench = self._f.create_dataset(
@@ -47,7 +49,7 @@ class Recorder:
         self.ncon = _ds("contact_count", (), dtype="i2") # #contacts/step
 
     # ------- public API -------------------------------------------------- #
-    def append(self, data, t: float) -> None:
+    def append(self, data, t: float, cmd_vel: tuple[float, float, float] = (0.0, 0.0, 0.0)) -> None:
         """Copy the current mjData into the datasets (O(#floats) memcpy)."""
         s = slice(self._i, self._i + 1)
 
@@ -58,6 +60,7 @@ class Recorder:
             (self.qvel,     data.qvel),
             (self.act_frc,  data.actuator_force),
             (self.cacc,     data.cacc),
+            (self.cmd_vel,  np.array(cmd_vel, dtype=np.float32)),
         ):
             d.resize(self._i + 1, axis=0)
             d[s] = arr
