@@ -33,6 +33,11 @@ class Recorder:
         self.qpos = _ds("qpos", (nq,))
         self.qvel = _ds("qvel", (nv,))
         self.act_frc = _ds("act_force", (nu,))
+        # ────────────────────────────────────────────────────────────────
+        # Per-joint *targets* that the neural network spits out each tick
+        # (same ordering as `joint_names` in the model metadata)
+        # ────────────────────────────────────────────────────────────────
+        self.action_target = _ds("action_target", (nu,))
         self.cacc = _ds("cacc", (nb, 6))  # 6-D per body
 
         # Command data storage
@@ -71,7 +76,13 @@ class Recorder:
         self.body_names[:] = names
 
     # ------- public API -------------------------------------------------- #
-    def append(self, data: mujoco.MjData, t: float, cmd_vel: tuple[float, float, float] = (0.0, 0.0, 0.0)) -> None:
+    def append(
+        self,
+        data: mujoco.MjData,
+        t: float,
+        cmd_vel: tuple[float, float, float],
+        action: "np.ndarray",
+    ) -> None:
         """Copy the current mjData into the datasets (O(#floats) memcpy)."""
         s = slice(self._i, self._i + 1)
 
@@ -83,6 +94,7 @@ class Recorder:
             (self.act_frc, data.actuator_force),
             (self.cacc, data.cacc),
             (self.cmd_vel, np.array(cmd_vel, dtype=np.float32)),
+            (self.action_target, action.astype(np.float32)),
         ):
             d.resize(self._i + 1, axis=0)
             d[s] = arr

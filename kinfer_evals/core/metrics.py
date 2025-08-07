@@ -8,11 +8,13 @@ import numpy as np
 from kinfer_evals.artifacts.plots import (
     _plot_xy_trajectory,
     plot_accel,
-    plot_contact_force_per_body,  # NEW
+    plot_contact_force_per_body,
     plot_heading,
     plot_omega,
     plot_velocity,
+    plot_actions,
 )
+from kinfer_sim.server import load_joint_names
 from kinfer_evals.core.eval_utils import get_yaw_from_quaternion
 from kinfer_evals.reference_state import ReferenceStateTracker
 
@@ -44,7 +46,8 @@ def run(h5: Path, outdir: Path, run_meta: dict[str, object]) -> dict[str, float]
         # -------- per-body contact forces --------------------------- #
         body_names = [n.decode() if isinstance(n, bytes) else str(n) for n in f["body_names"][:]]
         contact_body = f["contact_body"][:]  # ragged
-        wrench_flat = f["contact_wrench"][:]  # ragged
+        wrench_flat = f["contact_wrench"][:]          # ragged
+        actions = f["action_target"][:] if "action_target" in f else None
 
     nb = len(body_names)
     per_body = np.zeros((nb, len(t)), dtype=np.float32)  # (nb, T)
@@ -141,6 +144,14 @@ def run(h5: Path, outdir: Path, run_meta: dict[str, object]) -> dict[str, float]
 
     plot_heading(time_s, ref_yaw, yaw_series_u, yaw_err, plots_dir, run_meta)
     plot_omega(time_s[1:], cmd_omega[:-1], act_omega, err_om, plots_dir, run_meta)
+
+    # ----------- action plot --------------------------------------- #
+    if actions is not None:
+        try:
+            joint_names = load_joint_names(Path(run_meta["kinfer"]))
+        except Exception:
+            joint_names = [f"joint_{i}" for i in range(actions.shape[1])]
+        plot_actions(time_s, actions, joint_names, plots_dir, run_meta)
 
     # ----------- contact plots ---------------------------------------- #
     from kinfer_evals.artifacts.plots import (

@@ -80,8 +80,13 @@ async def run_episode(
             if video_writer and step_idx % decim == 0:
                 video_writer.append(sim.read_pixels())
 
-            # Record data including commands
-            rec.append(sim._data, step_idx * dt_ctrl, (cmd_vx_body, cmd_vy_body, cmd_omega))
+            # Record data including commands & NN actions
+            rec.append(
+                sim._data,
+                step_idx * dt_ctrl,
+                (cmd_vx_body, cmd_vy_body, cmd_omega),
+                out,
+            )
             await asyncio.sleep(0)
 
             step_idx += 1
@@ -167,7 +172,11 @@ async def run_eval(
 
     try:
         vid = outdir / "video.mp4"
-        artifacts = ([vid] if vid.exists() else []) + sorted(outdir.glob("*.png"))
+        plots_dir = outdir / "plots"
+        artifacts = (
+            ([vid] if vid.exists() else [])
+            + (sorted(plots_dir.glob("*.png")) if plots_dir.exists() else [])
+        )
         url = push_summary(combined, artifacts)
         logger.info("Logged run to Notion: %s", url)
     except Exception as exc:
