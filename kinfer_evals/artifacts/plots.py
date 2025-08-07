@@ -1,6 +1,8 @@
 """Plotting utilities."""
 
+import re
 import textwrap
+import unicodedata
 from pathlib import Path
 from typing import Sequence
 
@@ -301,8 +303,6 @@ def _plot_xy_trajectory(
 
 
 def _make_single_axis_fig() -> tuple["plt.Figure", "plt.Axes"]:
-    import matplotlib.pyplot as plt
-
     fig, ax = plt.subplots(figsize=(7, 4))
     fig.tight_layout(rect=(0, 0.20, 1, 1))  # footer strip
     return fig, ax
@@ -350,9 +350,6 @@ def plot_contact_force_mag(
 
 def _safe_fname(name: str) -> str:
     """Return *name* that is safe as a filename (spaces→_, slash→- …)."""
-    import re
-    import unicodedata
-
     t = unicodedata.normalize("NFKD", name)
     t = re.sub(r"[\\/:*?\"<>|]", "-", t)  # Windows-safe
     t = re.sub(r"\s+", "_", t)  # spaces → _

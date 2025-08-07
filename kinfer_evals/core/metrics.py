@@ -12,6 +12,8 @@ from kinfer_evals.artifacts.plots import (
     _plot_xy_trajectory,
     plot_accel,
     plot_actions,
+    plot_contact_count,
+    plot_contact_force_mag,
     plot_contact_force_per_body,
     plot_heading,
     plot_input_series,
@@ -169,11 +171,6 @@ def run(h5: Path, outdir: Path, run_meta: dict[str, object]) -> dict[str, float]
         plot_actions(time_s, actions.tolist(), joint_names, plots_dir, run_meta)
 
     # ----------- contact plots ---------------------------------------- #
-    from kinfer_evals.artifacts.plots import (
-        plot_contact_count,
-        plot_contact_force_mag,
-    )
-
     plot_contact_count(time_s, ncon.tolist(), plots_dir, run_meta)
     plot_contact_force_mag(time_s, fmag.tolist(), plots_dir, run_meta)
 
