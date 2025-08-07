@@ -52,6 +52,27 @@ class Recorder:
         self.ncon = _ds("contact_count", (), dtype="i2")          # #contacts/step
         self.fmag = _ds("contact_force_mag", (), dtype="f4")      # Σ|F| per step
 
+        vlen_i2 = h5py.vlen_dtype(np.dtype("i2"))
+        self.cbody = self._f.create_dataset(
+            "contact_body",
+            shape=(0,),
+            maxshape=(None,),
+            chunks=(_CHUNK,),
+            dtype=vlen_i2,
+            compression=compress,
+            compression_opts=lvl,
+        )
+
+        self._force_per_body = np.zeros(nb, dtype=np.float32)
+
+        str_t = h5py.string_dtype(encoding="utf-8")
+        self.body_names = self._f.create_dataset("body_names", (nb,), dtype=str_t)
+        names = [
+            mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, i) or f"body_{i}"
+            for i in range(nb)
+        ]
+        self.body_names[:] = names
+
     # ------- public API -------------------------------------------------- #
     def append(self, data: mujoco.MjData, t: float, cmd_vel: tuple[float, float, float] = (0.0, 0.0, 0.0)) -> None:
         """Copy the current mjData into the datasets (O(#floats) memcpy)."""
@@ -72,15 +93,30 @@ class Recorder:
         # ------- contact wrench (ragged) -------------------------------- #
         cf = np.empty(6, dtype=np.float64)  # mjtNum = float64
         frames = []
+        bodies = []
         for j in range(data.ncon):
             mujoco.mj_contactForce(self._model, data, j, cf)  # 6-D FT
             frames.append(cf.copy().astype(np.float32))  # cast to f32 for storage
+
+            con = data.contact[j]
+            bodies.extend([
+                self._model.geom_bodyid[con.geom1],
+                self._model.geom_bodyid[con.geom2],
+            ])
+
+            body_a = self._model.geom_bodyid[con.geom1]
+            body_b = self._model.geom_bodyid[con.geom2]
+            body_id = body_b if body_a == 0 else body_a
+            self._force_per_body[body_id] += float(np.linalg.norm(cf[:3]))  # |F|
 
         # flatten (ncon,6) → (6*ncon,)  for storage; reader reshapes later
         flat = np.concatenate(frames).astype("f4") if frames else np.zeros(0, dtype="f4")
 
         self.wrench.resize(self._i + 1, axis=0)
-        self.wrench[s] = [flat]  # each element = 1 VLEN array
+        self.wrench[s] = [flat]
+
+        self.cbody.resize(self._i + 1, axis=0)
+        self.cbody[s] = [np.asarray(bodies, dtype="i2")]
 
         # ---------- per-step aggregates -------------------------------- #
         self.ncon.resize(self._i + 1, axis=0)
@@ -96,4 +132,10 @@ class Recorder:
         self._i += 1
 
     def close(self) -> None:
+        # write final per-body aggregate before closing the file
+        self._f.create_dataset(
+            "force_per_body",
+            data=self._force_per_body.astype("f4"),   # (nbody,)  float32
+            dtype="f4",
+        )
         self._f.close()
