@@ -36,6 +36,8 @@ def run(h5: Path, outdir: Path, run_meta: dict[str, object]) -> dict[str, float]
         qpos = f["qpos"][:]  # (T, nq)
         qvel = f["qvel"][:]  # (T, nv)
         cmd_vel = f["cmd_vel"][:]  # (T, 3) - [vx, vy, omega]
+        ncon = f["contact_count"][:]          # (T,)
+        fmag = f["contact_force_mag"][:]      # (T,)
 
     dt = np.mean(np.diff(t))
 
@@ -122,6 +124,15 @@ def run(h5: Path, outdir: Path, run_meta: dict[str, object]) -> dict[str, float]
     # ----------- plots ------------------------------------------------- #
     plot_heading(time_s, ref_yaw, yaw_series_u, yaw_err, outdir, run_meta)
     plot_omega(time_s[1:], cmd_omega[:-1], act_omega, err_om, outdir, run_meta)
+
+    # ----------- contact plots ---------------------------------------- #
+    from kinfer_evals.artifacts.plots import (
+        plot_contact_count,
+        plot_contact_force_mag,
+    )
+
+    plot_contact_count(time_s, ncon, outdir, run_meta)      # count
+    plot_contact_force_mag(time_s, fmag, outdir, run_meta)          # Σ|F|
 
     _plot_xy_trajectory(ref_x, ref_y, qpos[:, 0], qpos[:, 1], outdir, run_meta)
 

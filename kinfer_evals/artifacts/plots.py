@@ -295,3 +295,53 @@ def _plot_xy_trajectory(
     outdir.mkdir(parents=True, exist_ok=True)
     fig.savefig(outdir / "traj_xy.png", dpi=150, bbox_inches="tight")
     plt.close(fig)
+
+
+# -------- Contact utility plots ------------------------------------ #
+
+def _make_single_axis_fig() -> tuple["plt.Figure", "plt.Axes"]:
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(7, 4))
+    fig.tight_layout(rect=(0, 0.20, 1, 1))   # footer strip
+    return fig, ax
+
+
+def plot_contact_count(
+    time_s: Sequence[float],
+    ncon: Sequence[int],
+    outdir: Path,
+    info: dict[str, object],
+) -> None:
+    """Plot number of contacts over time."""
+    fig, ax = _make_single_axis_fig()
+
+    ax.plot(time_s, ncon, color="tab:blue")
+    ax.set_xlabel("time [s]")
+    ax.set_ylabel("# contacts")
+    ax.set_title("Contact count")
+
+    _add_footer(fig, info)
+    outdir.mkdir(parents=True, exist_ok=True)
+    fig.savefig(outdir / "contact_count.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
+def plot_contact_force_mag(
+    time_s: Sequence[float],
+    fmag: Sequence[float],
+    outdir: Path,
+    info: dict[str, object],
+) -> None:
+    """Plot summed |F| over time."""
+    fig, ax = _make_single_axis_fig()
+
+    ax.plot(time_s, fmag, color="tab:red")
+    ax.set_xlabel("time [s]")
+    ax.set_ylabel("Σ |F|  [N]")
+    ax.set_title("Total contact-force magnitude")
+
+    _add_footer(fig, info)
+    outdir.mkdir(parents=True, exist_ok=True)
+    fig.savefig(outdir / "contact_force_mag.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)

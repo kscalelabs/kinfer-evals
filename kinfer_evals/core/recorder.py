@@ -49,7 +49,8 @@ class Recorder:
             compression=compress,
             compression_opts=lvl,
         )
-        self.ncon = _ds("contact_count", (), dtype="i2")  # #contacts/step
+        self.ncon = _ds("contact_count", (), dtype="i2")          # #contacts/step
+        self.fmag = _ds("contact_force_mag", (), dtype="f4")      # Σ|F| per step
 
     # ------- public API -------------------------------------------------- #
     def append(self, data: mujoco.MjData, t: float, cmd_vel: tuple[float, float, float] = (0.0, 0.0, 0.0)) -> None:
@@ -81,8 +82,16 @@ class Recorder:
         self.wrench.resize(self._i + 1, axis=0)
         self.wrench[s] = [flat]  # each element = 1 VLEN array
 
+        # ---------- per-step aggregates -------------------------------- #
         self.ncon.resize(self._i + 1, axis=0)
         self.ncon[s] = data.ncon
+
+        total_f = 0.0
+        if frames:                                    # frames = [(6,), …]
+            forces = np.asarray(frames, dtype=np.float32)[:, :3]   # Fx Fy Fz
+            total_f = float(np.linalg.norm(forces, axis=1).sum())  # Σ|F|
+        self.fmag.resize(self._i + 1, axis=0)
+        self.fmag[s] = total_f
 
         self._i += 1
 
