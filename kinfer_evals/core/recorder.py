@@ -12,7 +12,7 @@ _CHUNK = 1024  # steps per chunk → good compression ÷ I/O
 class Recorder:
     """Append-only HDF5 writer for MuJoCo episodes (float32, gzip)."""
 
-    def __init__(self, model: mujoco.MjModel, file: Path, *, compress: str = "gzip", lvl: int = 4) -> None:
+    def __init__(self, file: Path, model: mujoco.MjModel, *, compress: str = "gzip", lvl: int = 4) -> None:
         self._f = h5py.File(file, "w")
         self._i = 0
         self._model = model  # store model reference for mj_contactForce
