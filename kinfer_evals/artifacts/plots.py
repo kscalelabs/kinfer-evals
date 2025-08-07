@@ -1,6 +1,8 @@
 """Plotting utilities."""
 
+import re
 import textwrap
+import unicodedata
 from pathlib import Path
 from typing import Sequence
 
@@ -216,7 +218,7 @@ def _plot_xy_trajectory(
     act_x: Sequence[float],
     act_y: Sequence[float],
     outdir: Path,
-    run_info: dict[str, str],
+    run_info: dict[str, object],
 ) -> None:
     """Save a top-down plot comparing reference vs. actual XY trajectories.
 
@@ -294,4 +296,127 @@ def _plot_xy_trajectory(
 
     outdir.mkdir(parents=True, exist_ok=True)
     fig.savefig(outdir / "traj_xy.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
+# -------- Contact utility plots ------------------------------------ #
+
+
+def _make_single_axis_fig() -> tuple["plt.Figure", "plt.Axes"]:
+    fig, ax = plt.subplots(figsize=(7, 4))
+    fig.tight_layout(rect=(0, 0.20, 1, 1))  # footer strip
+    return fig, ax
+
+
+def plot_contact_count(
+    time_s: Sequence[float],
+    ncon: Sequence[int],
+    outdir: Path,
+    info: dict[str, object],
+) -> None:
+    """Plot number of contacts over time."""
+    fig, ax = _make_single_axis_fig()
+
+    ax.plot(time_s, ncon, color="tab:blue")
+    ax.set_xlabel("time [s]")
+    ax.set_ylabel("# contacts")
+    ax.set_title("Contact count")
+
+    _add_footer(fig, info)
+    outdir.mkdir(parents=True, exist_ok=True)
+    fig.savefig(outdir / "contact_count.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
+def plot_contact_force_mag(
+    time_s: Sequence[float],
+    fmag: Sequence[float],
+    outdir: Path,
+    info: dict[str, object],
+) -> None:
+    """Plot summed |F| over time."""
+    fig, ax = _make_single_axis_fig()
+
+    ax.plot(time_s, fmag, color="tab:red")
+    ax.set_xlabel("time [s]")
+    ax.set_ylabel("Σ |F|  [N]")
+    ax.set_title("Total contact-force magnitude")
+
+    _add_footer(fig, info)
+    outdir.mkdir(parents=True, exist_ok=True)
+    fig.savefig(outdir / "contact_force_mag.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
+def _safe_fname(name: str) -> str:
+    """Return *name* that is safe as a filename (spaces→_, slash→- …)."""
+    t = unicodedata.normalize("NFKD", name)
+    t = re.sub(r"[\\/:*?\"<>|]", "-", t)  # Windows-safe
+    t = re.sub(r"\s+", "_", t)  # spaces → _
+    return t
+
+
+def plot_contact_force_per_body(
+    time_s: Sequence[float],
+    per_body: "np.ndarray",  # shape (nbodies, T)
+    body_names: Sequence[str],
+    outdir: Path,
+    info: dict[str, object],
+) -> None:
+    """Plot |F| time-series.
+
+    • one combined figure (all non-zero bodies)
+    • one figure per body with any non-zero force
+    """
+    nz = [i for i in range(per_body.shape[0]) if np.any(per_body[i] > 0)]
+    if not nz:
+        return
+
+    # -------- combined plot ---------------------------------------- #
+    fig, ax = _make_single_axis_fig()
+    for i in nz:
+        ax.plot(time_s, per_body[i], linewidth=1, label=body_names[i])
+    ax.set_xlabel("time [s]")
+    ax.set_ylabel("|F|  [N]")
+    ax.set_title("Per-body contact-force magnitude")
+    ax.legend(loc="upper right", fontsize=6, ncol=min(4, len(nz)))
+    _add_footer(fig, info)
+    outdir.mkdir(parents=True, exist_ok=True)
+    fig.savefig(outdir / "contact_force_per_body_all.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+    # -------- individual plots ------------------------------------- #
+    for i in nz:
+        fig, ax = _make_single_axis_fig()
+        ax.plot(time_s, per_body[i], color="tab:orange")
+        ax.set_xlabel("time [s]")
+        ax.set_ylabel("|F|  [N]")
+        ax.set_title(f"Contact-force magnitude – {body_names[i]}")
+        _add_footer(fig, info)
+        fname = f"contact_force_{_safe_fname(body_names[i])}.png"
+        fig.savefig(outdir / fname, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+
+
+def plot_input_series(
+    time_s: Sequence[float],
+    data: "np.ndarray",  # shape (T, N)
+    labels: Sequence[str],
+    name: str,
+    outdir: Path,
+    info: dict[str, object],
+) -> None:
+    """Plot each component of a policy-input vector on one figure."""
+    fig, ax = _make_single_axis_fig()
+
+    for i, lbl in enumerate(labels):
+        ax.plot(time_s, data[:, i], label=lbl, linewidth=1)
+
+    ax.set_xlabel("time [s]")
+    ax.set_title(f"Policy input – {name}")
+    ax.legend(loc="upper right", fontsize=7, ncol=min(4, len(labels)))
+
+    _add_footer(fig, info)
+    outdir.mkdir(parents=True, exist_ok=True)
+    fig.savefig(outdir / f"input_{name}.png", dpi=150, bbox_inches="tight")
     plt.close(fig)
