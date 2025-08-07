@@ -1,11 +1,11 @@
-"""Common utilities for evals."""
+"""Runs the eval, then processes, saves and publishes the results."""
 
 import asyncio
 import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Mapping, Sequence
+from typing import TYPE_CHECKING
 
 from kinfer.rust_bindings import PyModelRunner
 from kinfer_sim.provider import ModelProvider
@@ -34,7 +34,7 @@ async def run_episode(
     run_info: dict | None = None,
     *,
     record_video: bool = True,
-) -> list[Mapping[str, object]]:
+) -> None:
     """Physics → inference → actuation loop, plots and optional video."""
     outdir.mkdir(parents=True, exist_ok=True)
 
@@ -50,7 +50,7 @@ async def run_episode(
     elif record_video and not isinstance(sim._viewer, DefaultMujocoViewer):
         logger.warning("Cannot record video: QtViewer is active; run without --render")
 
-    carry, log = runner.init(), []
+    carry = runner.init()
     dt_ctrl = 1.0 / sim._control_frequency
 
     n_ctrl_steps = int(round(seconds * sim._control_frequency))
@@ -80,9 +80,6 @@ async def run_episode(
             if video_writer and step_idx % decim == 0:
                 video_writer.append(sim.read_pixels())
 
-            # keep logging the sim state
-            log.append(sim.get_state().as_dict())
-
             # Record data including commands
             rec.append(sim._data, step_idx * dt_ctrl, (cmd_vx_body, cmd_vy_body, cmd_omega))
             await asyncio.sleep(0)
@@ -95,13 +92,6 @@ async def run_episode(
             video_writer.close()
         rec.close()
 
-    return log
-
-
-def save_debug_log(log: Sequence[Mapping[str, object]], out: Path, fname: str = "debug_log.json") -> None:
-    out.mkdir(parents=True, exist_ok=True)
-    (out / fname).write_text(json.dumps(log, indent=2))
-    logger.info("Saved debug log to %s", out / fname)
 
 
 def build_run_info(args: RunArgs, timestamp: str, outdir: Path, duration_seconds: float) -> dict:
@@ -150,7 +140,7 @@ async def run_eval(
     # Save & keep run metadata
     run_info = build_run_info(args, timestamp, outdir, duration_seconds)
 
-    log = await run_episode(
+    await run_episode(
         sim,
         runner,
         duration_seconds,
@@ -159,9 +149,6 @@ async def run_eval(
         run_info,
         record_video=not args.render,
     )
-
-    # Save debug log if needed
-    save_debug_log(log, outdir, f"{eval_name}_debug_log.json")
 
     # Run post-processing metrics
     run_meta = {
