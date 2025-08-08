@@ -109,6 +109,7 @@ def build_run_info(args: RunArgs, timestamp: str, outdir: Path, duration_seconds
         "eval_name": args.eval_name,
         "kinfer_file": str(args.kinfer.absolute()),
         "robot": args.robot,
+        "author": args.author,
         "duration_seconds": duration_seconds,
         "output_directory": str(outdir.absolute()),
     }
@@ -162,6 +163,7 @@ async def run_eval(
     run_meta = {
         "kinfer": str(args.kinfer.absolute()),
         "robot": args.robot,
+        "author": args.author,
         "eval_name": eval_name,
         "timestamp": timestamp,
         "outdir": str(outdir.absolute()),
