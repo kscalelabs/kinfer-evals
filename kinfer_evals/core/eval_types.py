@@ -13,6 +13,7 @@ class RunArgs:
     kinfer: Path
     robot: str
     out: Path
+    author: str
     render: bool = False
 
 

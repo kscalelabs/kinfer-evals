@@ -22,6 +22,7 @@ def main() -> None:
     parser.add_argument("robot")
     parser.add_argument("eval", choices=sorted(REGISTRY.keys()))
     parser.add_argument("--out", type=Path, default=Path("runs"))
+    parser.add_argument("--author", type=str, default="")
     parser.add_argument(
         "--render",
         action="store_true",
@@ -30,7 +31,7 @@ def main() -> None:
 
     ns = parser.parse_args()
     make = REGISTRY[ns.eval]  # the registered function
-    args = RunArgs(ns.eval, ns.kinfer, ns.robot, ns.out, ns.render)
+    args = RunArgs(eval_name=ns.eval, kinfer=ns.kinfer, robot=ns.robot, out=ns.out, author=ns.author, render=ns.render)
     asyncio.run(run_eval(make, ns.eval, args))
 
 
