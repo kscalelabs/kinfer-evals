@@ -120,7 +120,7 @@ async def run_eval(
     make_cmds: "CommandMaker",
     eval_name: str,
     args: RunArgs,
-) -> None:
+) -> str | None:
     """Common driver used by every eval.
 
     • spin up sim/runner with a dummy keyboard state
@@ -174,11 +174,14 @@ async def run_eval(
     (outdir / "run_summary.json").write_text(json.dumps(combined, indent=2))
     logger.info("Saved combined summary to %s", outdir / "run_summary.json")
 
+    notion_url: str | None = None
     try:
         vid = outdir / "video.mp4"
         plots_dir = outdir / "plots"
         artifacts = ([vid] if vid.exists() else []) + (sorted(plots_dir.glob("*.png")) if plots_dir.exists() else [])
-        url = push_summary(combined, artifacts)
-        logger.info("Logged run to Notion: %s", url)
+        notion_url = push_summary(combined, artifacts)
+        logger.info("Logged run to Notion: %s", notion_url)
     except Exception as exc:
         logger.warning("Failed to push results to Notion: %s", exc)
+
+    return notion_url

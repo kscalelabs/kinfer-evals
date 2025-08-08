@@ -31,7 +31,9 @@ def main() -> None:
     ns = parser.parse_args()
     make = REGISTRY[ns.eval]  # the registered function
     args = RunArgs(ns.eval, ns.kinfer, ns.robot, ns.out, ns.render)
-    asyncio.run(run_eval(make, ns.eval, args))
+    url = asyncio.run(run_eval(make, ns.eval, args))
+    if url:
+        print(url)
 
 
 if __name__ == "__main__":
