@@ -2,10 +2,11 @@
 
 import asyncio
 from pathlib import Path
+import tarfile
 from typing import Callable
 
 import numpy as np
-from kinfer.rust_bindings import PyModelRunner
+from kinfer.rust_bindings import PyModelRunner, metadata_from_json
 from kinfer_sim.provider import ModelProvider
 from kinfer_sim.server import find_mjcf, get_model_metadata
 from kinfer_sim.simulator import MujocoSimulator
@@ -16,8 +17,11 @@ from kinfer_evals.core.eval_types import CommandFactory
 
 
 def cmd(vx: float = 0.0, yaw: float = 0.0) -> list[float]:
-    """Return a 6-D ExpandedControlVector (vx, vy, yaw, h, roll, pitch)."""
-    return [vx, 0.0, yaw]
+    """Return a 16-D ControlVector (vx, vy, yaw, h, roll, pitch, 10 arm joints)."""
+    cmd = [0.0] * 16
+    cmd[0] = vx
+    cmd[2] = yaw
+    return cmd
 
 
 def ramp(start: float, end: float, duration_s: float, freq_hz: float) -> list[float]:
@@ -75,3 +79,14 @@ async def load_sim_and_runner(
     provider = ModelProvider(sim, keyboard_state=cmd_factory())
     runner = PyModelRunner(str(kinfer), provider)
     return sim, runner, provider
+
+
+def get_num_model_commands(kinfer: Path) -> int:
+    with tarfile.open(kinfer, "r:gz") as tar:
+        metadata_file = tar.extractfile("metadata.json")
+        if metadata_file is None:
+            raise ValueError("metadata.json not found in kinfer file")
+        metadata = metadata_from_json(metadata_file.read().decode("utf-8"))
+        if metadata.num_commands is None:  # type: ignore[attr-defined]
+            raise ValueError("num_commands not specified in model metadata")
+    return metadata.num_commands
