@@ -15,7 +15,7 @@ from kmv.utils.logging import VideoWriter
 
 from kinfer_evals.core import metrics
 from kinfer_evals.core.eval_types import PrecomputedInputState, RunArgs
-from kinfer_evals.core.eval_utils import load_sim_and_runner
+from kinfer_evals.core.eval_utils import get_num_model_commands, load_sim_and_runner
 from kinfer_evals.core.recorder import Recorder
 from kinfer_evals.publishers.notion import push_summary
 
@@ -128,17 +128,19 @@ async def run_eval(
     • wrap it in PrecomputedInputState
     • run the episode & save artifacts
     """
+    num_model_commands = get_num_model_commands(args.kinfer)
+
     sim, runner, provider = await load_sim_and_runner(
         args.kinfer,
         args.robot,
-        cmd_factory=lambda: PrecomputedInputState([[0.0, 0.0, 0.0]]),
+        cmd_factory=lambda: PrecomputedInputState([[0.0] * num_model_commands]),
         render=args.render,
         free_camera=False,
     )
 
     freq = sim._control_frequency
     commands = make_cmds(freq)
-    provider.keyboard_state = PrecomputedInputState(commands)
+    provider.keyboard_state = PrecomputedInputState(commands, num_model_commands)
     duration_seconds = len(commands) / freq
 
     # Create timestamped subdirectory for this run
