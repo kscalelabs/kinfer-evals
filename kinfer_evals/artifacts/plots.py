@@ -454,8 +454,8 @@ def plot_gait_frequency(
     ax.legend(loc="upper right")
 
     # Set axis limits
-    ax.set_xlim(time_s[0], time_s[-1])  # Full time range
-    ymin = min(frequencies) * 0.9
+    ax.set_xlim(time_s[0]-.5, time_s[-1]+.5)
+    ymin = min(min(frequencies) * 0.9, 0.0)
     ymax = max(frequencies) * 1.1
     ax.set_ylim(ymin, ymax)
 
@@ -498,8 +498,8 @@ def plot_double_support_intervals(
     ax.legend(loc="upper right")
 
     # Set axis limits
-    ax.set_xlim(time_s[0], time_s[-1])  # Full time range
-    ymin = min(values) * 0.9
+    ax.set_xlim(time_s[0]-.5, time_s[-1]+.5)
+    ymin = min(min(values) * 0.9, 0.0)
     ymax = max(values) * 1.1
     ax.set_ylim(ymin, ymax)
 
