@@ -398,6 +398,120 @@ def plot_contact_force_per_body(
         plt.close(fig)
 
 
+# ----------------- gait plots --------------------------------------- #
+
+
+def plot_n_feet_in_contact(
+    time_s: Sequence[float],
+    n_foot_con: Sequence[int],
+    outdir: Path,
+    info: dict[str, object],
+) -> None:
+    """Plot number of feet in contact over time."""
+    fig, ax = _make_single_axis_fig()
+
+    ax.plot(time_s, n_foot_con, color="tab:blue")
+    ax.set_xlabel("time [s]")
+    ax.set_ylabel("# feet in contact")
+    ax.set_title("Number of feet in contact")
+    ax.yaxis.set_major_locator(plt.MaxNLocator(integer=True))
+
+    _add_footer(fig, info)
+    outdir.mkdir(parents=True, exist_ok=True)
+    fig.savefig(outdir / "n_feet_in_contact.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
+def plot_gait_frequency(
+    time_s: Sequence[float],
+    gait_frequencies: dict,
+    outdir: Path,
+    info: dict[str, object],
+) -> None:
+    """Plot gait frequency over time."""
+    if not gait_frequencies:
+        return
+
+    fig, ax = _make_single_axis_fig()
+
+    strike_indices = sorted(gait_frequencies.keys())
+    times = np.array([time_s[i] for i in strike_indices])
+    frequencies = np.array([gait_frequencies[k] for k in strike_indices])
+    ax.bar(times, frequencies, width=0.05, alpha=0.6, color="tab:blue", label="Instantaneous")
+
+    mean_gait_frequency = np.mean(list(gait_frequencies.values()))
+    ax.axhline(
+        y=mean_gait_frequency,
+        color="tab:red",
+        linestyle="--",
+        linewidth=2,
+        label=f"Mean ({mean_gait_frequency:.2f} Hz)",
+    )
+
+    ax.set_xlabel("time [s]")
+    ax.set_ylabel("Frequency [Hz]")
+    ax.set_title("Gait frequency over time (gaps = stand cmd)")
+    ax.legend(loc="upper right")
+
+    # Set axis limits
+    ax.set_xlim(time_s[0], time_s[-1])  # Full time range
+    ymin = min(frequencies) * 0.9
+    ymax = max(frequencies) * 1.1
+    ax.set_ylim(ymin, ymax)
+
+    _add_footer(fig, info)
+    outdir.mkdir(parents=True, exist_ok=True)
+    fig.savefig(outdir / "gait_frequency.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
+def plot_double_support_intervals(
+    time_s: Sequence[float],
+    double_support_intervals: dict,
+    outdir: Path,
+    info: dict[str, object],
+) -> None:
+    """Plot double support intervals over time."""
+    if not double_support_intervals:  # No data
+        return
+
+    fig, ax = _make_single_axis_fig()
+
+    indices = sorted(double_support_intervals.keys())
+    times = np.array([time_s[i] for i in indices if i < len(time_s)])
+    values = np.array([double_support_intervals[i] for i in indices if i < len(time_s)])
+
+    ax.bar(times, values, width=0.05, alpha=0.6, color="tab:blue", label="Double support")
+
+    mean_support = np.mean(values)
+    ax.axhline(
+        y=mean_support,
+        color="tab:red",
+        linestyle="--",
+        linewidth=2,
+        label=f"Mean ({mean_support:.2f})",
+    )
+
+    ax.set_xlabel("time [s]")
+    ax.set_ylabel("Double support interval")
+    ax.set_title("Double support intervals over time")
+    ax.legend(loc="upper right")
+
+    # Set axis limits
+    ax.set_xlim(time_s[0], time_s[-1])  # Full time range
+    ymin = min(values) * 0.9
+    ymax = max(values) * 1.1
+    ax.set_ylim(ymin, ymax)
+
+    _add_footer(fig, info)
+    outdir.mkdir(parents=True, exist_ok=True)
+    fig.savefig(outdir / "double_support_intervals.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
+# ----------------- policy-input plots --------------------------------------- #
+
+
 def plot_input_series(
     time_s: Sequence[float],
     data: "np.ndarray",  # shape (T, N)

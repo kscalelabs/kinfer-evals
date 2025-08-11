@@ -2,7 +2,7 @@
 
 import logging
 from pathlib import Path
-from typing import cast
+from typing import Sequence, cast
 
 import h5py
 import numpy as np
@@ -15,8 +15,11 @@ from kinfer_evals.artifacts.plots import (
     plot_contact_count,
     plot_contact_force_mag,
     plot_contact_force_per_body,
+    plot_double_support_intervals,
+    plot_gait_frequency,
     plot_heading,
     plot_input_series,
+    plot_n_feet_in_contact,
     plot_omega,
     plot_velocity,
 )
@@ -34,6 +37,38 @@ def _body_frame_vel(qvel: np.ndarray, yaw_series: np.ndarray) -> tuple[np.ndarra
     return vx_b, vy_b
 
 
+def compute_gait_frequency(foot_con: Sequence[set], dt: float, cmd_vel: np.ndarray) -> dict:
+    foot_ids = set().union(*foot_con)
+    foot_states = {foot_id: np.array([foot_id in contact for contact in foot_con]) for foot_id in foot_ids}
+    strikes = {foot_id: np.where((arr[1:] == 1) & (arr[:-1] == 0))[0] for foot_id, arr in foot_states.items()}
+
+    moving_mask = np.any(np.abs(cmd_vel) > 1e-6, axis=1)
+    gait_periods = {}
+    for foot_id, strike_indices in strikes.items():
+        intervals = np.diff(strike_indices) * dt
+        for t, interval in zip(strike_indices, intervals):
+            if moving_mask[t]:
+                gait_periods[t] = interval
+
+    gait_frequencies = {k: 1 / v for k, v in gait_periods.items()}
+    return gait_frequencies
+
+
+def compute_double_support_intervals(n_feet_con: Sequence[int], dt: float, cmd_vel: np.ndarray) -> dict:
+    double_support_mask = [i == 2 for i in n_feet_con]
+
+    carry = 0
+    double_support_intervals = {}
+    for i in double_support_mask:
+        if i:
+            carry += 1
+        elif carry > 0:
+            double_support_intervals[carry] = carry * dt
+            carry = 0
+
+    return double_support_intervals
+
+
 def run(h5: Path, outdir: Path, run_meta: dict[str, object]) -> dict[str, float]:
     """Post-process *h5* → plots + metrics.
 
@@ -49,6 +84,7 @@ def run(h5: Path, outdir: Path, run_meta: dict[str, object]) -> dict[str, float]
         qvel = f["qvel"][:]  # (T, nv)
         cmd_vel = f["cmd_vel"][:]  # (T, 3) - [vx, vy, omega]
         ncon = f["contact_count"][:]  # (T,)
+        bcon = f["contact_body"][:]  # (T, 2*ncon)
         fmag = f["contact_force_mag"][:]  # (T,)
         # -------- per-body contact forces --------------------------- #
         body_names = [n.decode() if isinstance(n, bytes) else str(n) for n in f["body_names"][:]]
@@ -122,6 +158,14 @@ def run(h5: Path, outdir: Path, run_meta: dict[str, object]) -> dict[str, float]
     act_omega = np.diff(yaw_series_u) / dt
     err_om = act_omega - cmd_omega[:-1]
 
+    # ------------ gait metrics --------------------------------------- #
+    foot_con = [set(array[array != 0].astype(int)) for array in bcon]
+    n_foot_con = [len(c) for c in foot_con]
+
+    # Compute gait metrics
+    gait_frequencies = compute_gait_frequency(foot_con, dt, cmd_vel)
+    double_support_intervals = compute_double_support_intervals(n_foot_con, dt, cmd_vel)
+
     # ------------ numeric summary --------------------------------------- #
     def mae(x: np.ndarray) -> float:
         return float(np.mean(np.abs(x)))
@@ -178,6 +222,11 @@ def run(h5: Path, outdir: Path, run_meta: dict[str, object]) -> dict[str, float]
     plot_contact_force_per_body(time_s, per_body, body_names, plots_dir, run_meta)
 
     _plot_xy_trajectory(ref_x, ref_y, qpos[:, 0].tolist(), qpos[:, 1].tolist(), plots_dir, run_meta)
+
+    # ----------------- gait plots --------------------------------------- #
+    plot_n_feet_in_contact(time_s, n_foot_con, plots_dir, run_meta)
+    plot_gait_frequency(time_s, gait_frequencies, plots_dir, run_meta)
+    plot_double_support_intervals(time_s, double_support_intervals, plots_dir, run_meta)
 
     # ----------------- additional policy-input plots ------------------ #
     try:
