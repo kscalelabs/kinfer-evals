@@ -193,6 +193,8 @@ def run(h5: Path, outdir: Path, run_meta: dict[str, object]) -> dict[str, float]
         "mae_omega": mae(err_om),
         "rmse_omega": rmse(err_om),
         "omega_samples": int(len(err_om)),
+        # gait
+        "mean_gait_freq": np.mean(list(gait_frequencies.values())),
     }
 
     time_s = t.tolist()  # list[float] → satisfies Sequence[float]
