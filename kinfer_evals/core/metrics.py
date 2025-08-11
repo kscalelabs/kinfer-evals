@@ -56,14 +56,16 @@ def compute_gait_frequency(foot_con: Sequence[set], dt: float, cmd_vel: np.ndarr
 
 def compute_double_support_intervals(n_feet_con: Sequence[int], dt: float, cmd_vel: np.ndarray) -> dict:
     double_support_mask = [i == 2 for i in n_feet_con]
-
+    moving_mask = np.any(np.abs(cmd_vel) > 1e-6, axis=1)
     carry = 0
     double_support_intervals = {}
-    for i in double_support_mask:
-        if i:
+    for i, is_double in enumerate(double_support_mask):
+        if not moving_mask[i]:
+            carry = 0
+        if is_double:
             carry += 1
         elif carry > 0:
-            double_support_intervals[carry] = carry * dt
+            double_support_intervals[i] = carry * dt
             carry = 0
 
     return double_support_intervals
