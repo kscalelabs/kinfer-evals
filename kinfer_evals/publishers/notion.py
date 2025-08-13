@@ -136,8 +136,11 @@ def push_summary(
     page = cast(dict[str, object], notion.pages.create(parent={"database_id": DB_ID}, properties=props))
 
     if files:
+        # Put videos first, then all other files
+        files_sorted = sorted(files, key=lambda p: (p.suffix.lower() not in {".mp4", ".mov", ".mkv", ".webm"}, p.name))
+
         children: list[dict[str, object]] = []
-        for p in files:
+        for p in files_sorted:
             fid = _upload_file(p)
             ext = p.suffix.lower()
             if ext in {".png", ".jpg", ".jpeg", ".gif"}:

@@ -97,6 +97,14 @@ async def run_eval(
     # Render plots
     artifacts = render_artifacts(episode, run_info, outdir)
 
+    # Also include the recorded video, if present
+    video_path = outdir / "video.mp4"
+    if video_path.exists() and video_path.is_file():
+        artifacts.append(video_path)
+        logger.info("Including video artifact for Notion upload: %s", video_path)
+    else:
+        logger.info("No video artifact found at %s (skipping).", video_path)
+
     # Save combined summary
     combined = {**run_info, **metrics}
     (outdir / "run_summary.json").write_text(json.dumps(combined, indent=2))
