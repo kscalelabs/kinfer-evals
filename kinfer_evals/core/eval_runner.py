@@ -1,6 +1,6 @@
 """Entry point for running evals.
 
-CLI driver:  kinfer-eval  <policy>  <robot>  <eval-name>  [--seconds] [--out]
+CLI driver:  kinfer-eval  <policy>  <robot>  <eval-name>  [--out] [--render]
 """
 
 import argparse
@@ -29,7 +29,7 @@ def main() -> None:
     )
 
     ns = parser.parse_args()
-    make = REGISTRY[ns.eval]  # the registered function
+    make = REGISTRY[ns.eval]
     args = RunArgs(ns.eval, ns.kinfer, ns.robot, ns.out, ns.render)
     url = asyncio.run(run_eval(make, ns.eval, args))
     if url:

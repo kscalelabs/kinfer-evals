@@ -1,10 +1,19 @@
-"""Types shared across the eval package."""
+"""Project-wide typed arrays and data containers."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Protocol
+from typing import Optional, Protocol, TypedDict
 
+import numpy as np
+import numpy.typing as npt
 from kinfer_sim.provider import InputState
+
+F32 = np.float32
+I16 = np.int16
+
+Array1 = npt.NDArray[F32]  # shape (T,)
+Array2 = npt.NDArray[F32]  # shape (T, N)
+Int1 = npt.NDArray[I16]  # shape (T,)
 
 
 @dataclass
@@ -20,6 +29,32 @@ class CommandFactory(Protocol):
     """Anything that returns an InputState-compatible object."""
 
     def __call__(self) -> InputState: ...
+
+
+class RunInfo(TypedDict):
+    kinfer_file: str
+    robot: str
+    eval_name: str
+    timestamp: str
+    outdir: str
+
+
+@dataclass(frozen=True)
+class EpisodeData:
+    time: Array1  # (T,)
+    qpos: Array2  # (T, nq)
+    qvel: Array2  # (T, nv)
+    actuator_force: Array2  # (T, nu)
+    action_target: Optional[Array2]  # (T, nu) or None
+    cmd_vel: Array2  # (T, 3)  [vx, vy, omega]
+    contact_wrench: list[np.ndarray]  # list[(6*ncon_t,)] float32 per step
+    contact_body: list[np.ndarray]  # list[(2*ncon_t,)] int16 per step
+    contact_count: Int1  # (T,)
+    contact_force_mag: Array1  # (T,)
+    body_names: list[str]
+    dt: float
+    # Policy inputs captured during the run: {name -> (T, N)}
+    inputs: dict[str, Array2] = field(default_factory=dict)
 
 
 class PrecomputedInputState(InputState):

@@ -1,133 +1,42 @@
 """Runs the eval, then processes, saves and publishes the results."""
 
-import asyncio
 import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
 
-from kinfer.rust_bindings import PyModelRunner
-from kinfer_sim.provider import ModelProvider
-from kinfer_sim.simulator import MujocoSimulator
 from kmv.app.viewer import DefaultMujocoViewer
-from kmv.utils.logging import VideoWriter
 
-from kinfer_evals.core import metrics
-from kinfer_evals.core.eval_types import PrecomputedInputState, RunArgs
+from kinfer_evals.artifacts.plots import render_artifacts
+from kinfer_evals.core.eval_types import PrecomputedInputState, RunArgs, RunInfo
 from kinfer_evals.core.eval_utils import load_sim_and_runner
-from kinfer_evals.core.recorder import Recorder
+from kinfer_evals.core.io_h5 import EpisodeReader
+from kinfer_evals.core.metrics import compute_metrics
+from kinfer_evals.core.runner import EpisodeRunner, H5Sink, VideoSink
+from kinfer_evals.evals import CommandMaker
 from kinfer_evals.publishers.notion import push_summary
-
-if TYPE_CHECKING:
-    from kinfer_evals.evals import CommandMaker
 
 logger = logging.getLogger(__name__)
 
 
-async def run_episode(
-    sim: MujocoSimulator,
-    runner: PyModelRunner,
-    seconds: float,
-    outdir: Path,
-    provider: ModelProvider | None = None,
-    run_info: dict | None = None,
-    *,
-    record_video: bool = True,
-) -> None:
-    """Physics → inference → actuation loop, plots and optional video."""
-    outdir.mkdir(parents=True, exist_ok=True)
-
-    rec = Recorder(outdir / "episode.h5", sim._model)
-
-    video_writer = None
-    decim = 1
-
-    if record_video and isinstance(sim._viewer, DefaultMujocoViewer):
-        fps_target = 30
-        decim = max(1, int(round(sim._control_frequency / fps_target)))
-        video_writer = VideoWriter(outdir / "video.mp4", fps=fps_target)
-    elif record_video and not isinstance(sim._viewer, DefaultMujocoViewer):
-        logger.warning("Cannot record video: QtViewer is active; run without --render")
-
-    carry = runner.init()
-    dt_ctrl = 1.0 / sim._control_frequency
-
-    n_ctrl_steps = int(round(seconds * sim._control_frequency))
-    step_idx = 0
-
-    try:
-        while step_idx < n_ctrl_steps:
-            # Step physics
-            for _ in range(sim.sim_decimation):
-                await sim.step()
-
-            # Advance command index if we're using a PrecomputedInputState
-            if provider and hasattr(provider.keyboard_state, "step"):
-                provider.keyboard_state.step()
-
-            # Get commands
-            cmd_vx_body = cmd_vy_body = cmd_omega = 0.0
-            if provider is not None:
-                cmd_vx_body, cmd_vy_body = provider.keyboard_state.value[:2]
-                cmd_omega = provider.keyboard_state.value[2] if len(provider.keyboard_state.value) > 2 else 0.0
-
-            # Inference
-            out, carry = runner.step(carry)
-            runner.take_action(out)
-
-            # If saving video, append a frame
-            if video_writer and step_idx % decim == 0:
-                video_writer.append(sim.read_pixels())
-
-            # Snapshot all policy inputs prepared by the provider
-            arrays_copy = {k: v.copy() for k, v in provider.arrays.items()} if provider else {}
-
-            # Record data including commands and inputs
-            rec.append(
-                sim._data,
-                step_idx * dt_ctrl,
-                (cmd_vx_body, cmd_vy_body, cmd_omega),
-                out,
-                arrays_copy,
-            )
-            await asyncio.sleep(0)
-
-            step_idx += 1
-
-    finally:
-        await sim.close()
-        if video_writer:
-            video_writer.close()
-        rec.close()
-
-
-def build_run_info(args: RunArgs, timestamp: str, outdir: Path, duration_seconds: float) -> dict:
-    """Save metadata about this run for tracking purposes."""
-    run_info = {
+def _build_run_info(args: RunArgs, timestamp: str, outdir: Path) -> RunInfo:
+    """Build a RunInfo dictionary with the given arguments."""
+    return {
         "timestamp": timestamp,
         "eval_name": args.eval_name,
         "kinfer_file": str(args.kinfer.absolute()),
         "robot": args.robot,
-        "duration_seconds": duration_seconds,
-        "output_directory": str(outdir.absolute()),
+        "outdir": str(outdir.absolute()),
     }
 
-    return run_info
 
-
-async def run_eval(
-    make_cmds: "CommandMaker",
-    eval_name: str,
+async def _run_episode_to_h5(
+    make_cmds: CommandMaker,
     args: RunArgs,
-) -> str | None:
-    """Common driver used by every eval.
-
-    • spin up sim/runner with a dummy keyboard state
-    • build the full command list upfront
-    • wrap it in PrecomputedInputState
-    • run the episode & save artifacts
-    """
+    outdir: Path,
+    run_info: RunInfo,
+) -> Path:
+    """Spin up sim & runner, play commands, and record to HDF5."""
     sim, runner, provider = await load_sim_and_runner(
         args.kinfer,
         args.robot,
@@ -136,49 +45,66 @@ async def run_eval(
         free_camera=False,
     )
 
+    # Prepare commands
     freq = sim._control_frequency
     commands = make_cmds(freq)
     provider.keyboard_state = PrecomputedInputState(commands)
     duration_seconds = len(commands) / freq
 
-    # Create timestamped subdirectory for this run
+    outdir.mkdir(parents=True, exist_ok=True)
+    h5_path = outdir / "episode.h5"
+
+    # sinks: HDF5 (always) + video if allowed
+    sinks = [H5Sink(h5_path, sim, run_info=run_info)]
+    want_video = not args.render
+    if want_video:
+        try:
+            # Only supported with GLFW viewer
+            if isinstance(sim._viewer, DefaultMujocoViewer):
+                sinks.append(VideoSink(outdir / "video.mp4", sim))
+            else:
+                logger.warning("Cannot record video: QtViewer is active; run without --render")
+        except Exception as exc:
+            logger.warning("Failed to init VideoSink: %s", exc)
+
+    runner_task = EpisodeRunner(sim, runner, provider, sinks)
+    await runner_task.run(duration_seconds)
+    return h5_path
+
+
+async def run_eval(
+    make_cmds: "CommandMaker",
+    eval_name: str,
+    args: RunArgs,
+) -> str | None:
+    """Top-level orchestrator.
+
+    1) run episode → episode.h5
+    2) read episode → compute metrics
+    3) render artifacts
+    4) (optional) publish to Notion
+    """
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     outdir = args.out / eval_name / timestamp
+    run_info = _build_run_info(args, timestamp, outdir)
 
-    # Save & keep run metadata
-    run_info = build_run_info(args, timestamp, outdir, duration_seconds)
+    h5_path = await _run_episode_to_h5(make_cmds, args, outdir, run_info)
 
-    await run_episode(
-        sim,
-        runner,
-        duration_seconds,
-        outdir,
-        provider,
-        run_info,
-        record_video=not args.render,
-    )
+    # Read & compute
+    episode = EpisodeReader.read(h5_path)
+    metrics = compute_metrics(episode)
 
-    # Run post-processing metrics
-    run_meta = {
-        "kinfer": str(args.kinfer.absolute()),
-        "robot": args.robot,
-        "eval_name": eval_name,
-        "timestamp": timestamp,
-        "outdir": str(outdir.absolute()),
-    }
-
-    summary = metrics.run(outdir / "episode.h5", outdir, cast(dict[str, object], run_meta))
+    # Render plots
+    artifacts = render_artifacts(episode, run_info, outdir)
 
     # Save combined summary
-    combined = {**run_info, **summary}
+    combined = {**run_info, **metrics}
     (outdir / "run_summary.json").write_text(json.dumps(combined, indent=2))
     logger.info("Saved combined summary to %s", outdir / "run_summary.json")
 
+    # Publish
     notion_url: str | None = None
     try:
-        vid = outdir / "video.mp4"
-        plots_dir = outdir / "plots"
-        artifacts = ([vid] if vid.exists() else []) + (sorted(plots_dir.glob("*.png")) if plots_dir.exists() else [])
         notion_url = push_summary(combined, artifacts)
         logger.info("Logged run to Notion: %s", notion_url)
     except Exception as exc:
