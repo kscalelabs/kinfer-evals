@@ -106,15 +106,24 @@ async def run_eval(
         logger.info("No video artifact found at %s (skipping).", video_path)
 
     # Save combined summary
-    combined = {**run_info, **metrics}
-    (outdir / "run_summary.json").write_text(json.dumps(combined, indent=2))
-    logger.info("Saved combined summary to %s", outdir / "run_summary.json")
+    notion_url: str | None = None
+    combined = {**run_info, **metrics, "notion_url": notion_url or ""}
+    summary_path = outdir / "run_summary.json"
+    summary_path.write_text(json.dumps(combined, indent=2))
+    logger.info("Saved combined summary to %s", summary_path)
 
     # Publish
-    notion_url: str | None = None
     try:
         notion_url = push_summary(combined, artifacts)
         logger.info("Logged run to Notion: %s", notion_url)
+        try:
+            if notion_url:
+                (outdir / "notion_url.txt").write_text(notion_url + "\n")
+                # Update summary with actual notion_url
+                combined["notion_url"] = notion_url
+                summary_path.write_text(json.dumps(combined, indent=2))
+        except Exception as exc:
+            logger.warning("Failed to write notion_url.txt or update summary: %s", exc)
     except Exception as exc:
         logger.warning("Failed to push results to Notion: %s", exc)
 
