@@ -73,7 +73,7 @@ class VideoSink:
         self._vw.close()
 
 
-class EpisodeRunner:
+class EpisodeRollout:
     """Runs the physics+policy loop and fans out to sinks."""
 
     def __init__(

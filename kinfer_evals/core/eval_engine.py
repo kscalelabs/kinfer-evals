@@ -12,7 +12,7 @@ from kinfer_evals.core.eval_types import PrecomputedInputState, RunArgs, RunInfo
 from kinfer_evals.core.eval_utils import load_sim_and_runner
 from kinfer_evals.core.io_h5 import EpisodeReader
 from kinfer_evals.core.metrics import compute_metrics
-from kinfer_evals.core.runner import EpisodeRunner, H5Sink, StepSink, VideoSink
+from kinfer_evals.core.rollout import EpisodeRollout, H5Sink, StepSink, VideoSink
 from kinfer_evals.evals import CommandMaker
 from kinfer_evals.publishers.notion import push_summary
 
@@ -67,8 +67,8 @@ async def _run_episode_to_h5(
         except Exception as exc:
             logger.warning("Failed to init VideoSink: %s", exc)
 
-    runner_task = EpisodeRunner(sim, runner, provider, sinks)
-    await runner_task.run(duration_seconds)
+    rollout = EpisodeRollout(sim, runner, provider, sinks)
+    await rollout.run(duration_seconds)
     return h5_path
 
 
