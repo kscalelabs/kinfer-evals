@@ -12,7 +12,7 @@ from kinfer_evals.core.eval_types import PrecomputedInputState, RunArgs, RunInfo
 from kinfer_evals.core.eval_utils import load_sim_and_runner
 from kinfer_evals.core.io_h5 import EpisodeReader
 from kinfer_evals.core.metrics import compute_metrics
-from kinfer_evals.core.runner import EpisodeRunner, H5Sink, VideoSink
+from kinfer_evals.core.runner import EpisodeRunner, H5Sink, StepSink, VideoSink
 from kinfer_evals.evals import CommandMaker
 from kinfer_evals.publishers.notion import push_summary
 
@@ -55,7 +55,7 @@ async def _run_episode_to_h5(
     h5_path = outdir / "episode.h5"
 
     # sinks: HDF5 (always) + video if allowed
-    sinks = [H5Sink(h5_path, sim, run_info=run_info)]
+    sinks: list[StepSink] = [H5Sink(h5_path, sim, run_info=run_info)]
     want_video = not args.render
     if want_video:
         try:

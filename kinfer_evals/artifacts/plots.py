@@ -41,14 +41,17 @@ def _wrap_footer(pairs: list[tuple[str, str]], fig: Figure, *, font_size_pt: int
 
 def _add_footer(fig: Figure, run_info: RunInfo) -> None:
     """Add a standardized footer with run information to the figure."""
+    pairs: list[tuple[str, str]] = [
+        ("kinfer_file", str(run_info["kinfer_file"])),
+        ("robot", str(run_info["robot"])),
+        ("eval_name", str(run_info["eval_name"])),
+        ("timestamp", str(run_info["timestamp"])),
+        ("outdir", str(run_info["outdir"])),
+    ]
     fig.text(
         0.0,
         -0.02,
-        _wrap_footer(
-            [(k, str(run_info[k])) for k in ("kinfer_file", "robot", "eval_name", "timestamp", "outdir")],
-            fig,
-            font_size_pt=12,
-        ),
+        _wrap_footer(pairs, fig, font_size_pt=12),
         ha="left",
         va="top",
         fontsize=12,
@@ -258,11 +261,14 @@ def _plot_xy_trajectory(
     ax.set_title("XY trajectory (colour = time progression)", pad=10)
     ax.legend(loc="best")
 
-    footer_text = _wrap_footer(
-        [(k, str(run_info[k])) for k in ("kinfer_file", "robot", "eval_name", "timestamp", "outdir")],
-        fig,
-        font_size_pt=12,
-    )
+    footer_pairs: list[tuple[str, str]] = [
+        ("kinfer_file", str(run_info["kinfer_file"])),
+        ("robot", str(run_info["robot"])),
+        ("eval_name", str(run_info["eval_name"])),
+        ("timestamp", str(run_info["timestamp"])),
+        ("outdir", str(run_info["outdir"])),
+    ]
+    footer_text = _wrap_footer(footer_pairs, fig, font_size_pt=12)
     fig.text(0.0, -0.02, footer_text, ha="left", va="top", fontsize=12, linespacing=1.4, family="monospace")
 
     outdir.mkdir(parents=True, exist_ok=True)
