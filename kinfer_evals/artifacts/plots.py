@@ -16,6 +16,9 @@ from kinfer_evals.core.eval_types import EpisodeData, RunInfo
 from kinfer_evals.core.metrics import body_frame_vel, yaw_from_quat_wxyz
 from kinfer_evals.reference_state import ReferenceStateTracker
 
+# Shared defaults
+_FIGSIZE_SINGLE = (7, 4)
+
 
 def _wrap_footer(pairs: list[tuple[str, str]], fig: Figure, *, font_size_pt: int = 11) -> str:
     """Return a single multiline string where each pair (label, text) is rendered as `label: text`.
@@ -67,6 +70,43 @@ def _make_fig_with_footer() -> tuple[plt.Figure, tuple[plt.Axes, plt.Axes]]:
     return fig, (ax_top, ax_err)
 
 
+def _finalize_and_save(fig: Figure, outdir: Path, filename: str, run_info: RunInfo) -> Path:
+    """Append footer, ensure directory, save PNG, close figure, and return path."""
+    _add_footer(fig, run_info)
+    outdir.mkdir(parents=True, exist_ok=True)
+    path = outdir / filename
+    fig.savefig(path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    return path
+
+
+def _single_line_plot(
+    time_s: np.ndarray,
+    series: Sequence[tuple[np.ndarray, str]],
+    *,
+    title: str,
+    xlabel: str,
+    ylabel: str | None,
+    png_name: str,
+    outdir: Path,
+    run_info: RunInfo,
+    legend_kwargs: dict | None = None,
+) -> Path:
+    """Generic 1-axis line plot helper (no error subplot)."""
+    fig, ax = plt.subplots(figsize=_FIGSIZE_SINGLE)
+    fig.tight_layout(rect=(0, 0.20, 1, 1))
+    for y, lbl in series:
+        ax.plot(time_s, y, label=lbl, linewidth=1)
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
+    if ylabel:
+        ax.set_ylabel(ylabel)
+    # Show legend if caller asked for it, or if there are multiple series.
+    if legend_kwargs is not None or len(series) > 1:
+        ax.legend(**(legend_kwargs or {"loc": "upper right"}))
+    return _finalize_and_save(fig, outdir, png_name, run_info)
+
+
 def _plot_series_pair(
     time: np.ndarray,
     series: Sequence[tuple[np.ndarray, str]],
@@ -91,12 +131,7 @@ def _plot_series_pair(
     ax_err.set_ylabel("err")
     ax_err.legend(loc="upper right")
 
-    _add_footer(fig, run_info)
-    outdir.mkdir(parents=True, exist_ok=True)
-    fn = outdir / png_name
-    fig.savefig(fn, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    return fn
+    return _finalize_and_save(fig, outdir, png_name, run_info)
 
 
 def plot_velocity(
@@ -212,12 +247,7 @@ def plot_actions(
         frameon=False,
     )
 
-    _add_footer(fig, info)
-    outdir.mkdir(parents=True, exist_ok=True)
-    fn = outdir / "actions.png"
-    fig.savefig(fn, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    return fn
+    return _finalize_and_save(fig, outdir, "actions.png", info)
 
 
 def _plot_xy_trajectory(
@@ -261,21 +291,7 @@ def _plot_xy_trajectory(
     ax.set_title("XY trajectory (colour = time progression)", pad=10)
     ax.legend(loc="best")
 
-    footer_pairs: list[tuple[str, str]] = [
-        ("kinfer_file", str(run_info["kinfer_file"])),
-        ("robot", str(run_info["robot"])),
-        ("eval_name", str(run_info["eval_name"])),
-        ("timestamp", str(run_info["timestamp"])),
-        ("outdir", str(run_info["outdir"])),
-    ]
-    footer_text = _wrap_footer(footer_pairs, fig, font_size_pt=12)
-    fig.text(0.0, -0.02, footer_text, ha="left", va="top", fontsize=12, linespacing=1.4, family="monospace")
-
-    outdir.mkdir(parents=True, exist_ok=True)
-    fn = outdir / "traj_xy.png"
-    fig.savefig(fn, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    return fn
+    return _finalize_and_save(fig, outdir, "traj_xy.png", run_info)
 
 
 def _safe_fname(name: str) -> str:
@@ -287,35 +303,30 @@ def _safe_fname(name: str) -> str:
 
 def plot_contact_count(time_s: np.ndarray, ncon: np.ndarray, outdir: Path, info: RunInfo) -> Path:
     """Plot the number of contacts over time."""
-    fig, ax = plt.subplots(figsize=(7, 4))
-    fig.tight_layout(rect=(0, 0.20, 1, 1))
-    ax.plot(time_s, ncon)
-    ax.set_xlabel("time [s]")
-    ax.set_ylabel("# contacts")
-    ax.set_title("Contact count")
-
-    _add_footer(fig, info)
-    outdir.mkdir(parents=True, exist_ok=True)
-    fn = outdir / "contact_count.png"
-    fig.savefig(fn, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    return fn
+    return _single_line_plot(
+        time_s,
+        [(ncon, "#contacts")],
+        title="Contact count",
+        xlabel="time [s]",
+        ylabel="# contacts",
+        png_name="contact_count.png",
+        outdir=outdir,
+        run_info=info,
+    )
 
 
 def plot_contact_force_mag(time_s: np.ndarray, fmag: np.ndarray, outdir: Path, info: RunInfo) -> Path:
     """Plot the total contact-force magnitude over time."""
-    fig, ax = plt.subplots(figsize=(7, 4))
-    fig.tight_layout(rect=(0, 0.20, 1, 1))
-    ax.plot(time_s, fmag)
-    ax.set_xlabel("time [s]")
-    ax.set_ylabel("Σ |F|  [N]")
-    ax.set_title("Total contact-force magnitude")
-    _add_footer(fig, info)
-    outdir.mkdir(parents=True, exist_ok=True)
-    fn = outdir / "contact_force_mag.png"
-    fig.savefig(fn, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    return fn
+    return _single_line_plot(
+        time_s,
+        [(fmag, "Σ|F|")],
+        title="Total contact-force magnitude",
+        xlabel="time [s]",
+        ylabel="Σ |F|  [N]",
+        png_name="contact_force_mag.png",
+        outdir=outdir,
+        run_info=info,
+    )
 
 
 def plot_contact_force_per_body(
@@ -338,12 +349,7 @@ def plot_contact_force_per_body(
     ax.set_ylabel("|F|  [N]")
     ax.set_title("Per-body contact-force magnitude")
     ax.legend(loc="upper right", fontsize=6, ncol=min(4, len(nz)))
-    _add_footer(fig, info)
-    outdir.mkdir(parents=True, exist_ok=True)
-    fn_all = outdir / "contact_force_per_body_all.png"
-    fig.savefig(fn_all, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    paths.append(fn_all)
+    paths.append(_finalize_and_save(fig, outdir, "contact_force_per_body_all.png", info))
 
     # individual
     for i in nz:
@@ -353,11 +359,7 @@ def plot_contact_force_per_body(
         ax.set_xlabel("time [s]")
         ax.set_ylabel("|F|  [N]")
         ax.set_title(f"Contact-force magnitude – {body_names[i]}")
-        _add_footer(fig, info)
-        fname = outdir / f"contact_force_{_safe_fname(body_names[i])}.png"
-        fig.savefig(fname, dpi=150, bbox_inches="tight")
-        plt.close(fig)
-        paths.append(fname)
+        paths.append(_finalize_and_save(fig, outdir, f"contact_force_{_safe_fname(body_names[i])}.png", info))
 
     return paths
 
@@ -371,19 +373,18 @@ def plot_input_series(
     info: RunInfo,
 ) -> Path:
     """Plot each component of a policy-input vector on one figure."""
-    fig, ax = plt.subplots(figsize=(7, 4))
-    fig.tight_layout(rect=(0, 0.20, 1, 1))
-    for i, lbl in enumerate(labels):
-        ax.plot(time_s, data[:, i], label=lbl, linewidth=1)
-    ax.set_xlabel("time [s]")
-    ax.set_title(f"Policy input – {name}")
-    ax.legend(loc="upper right", fontsize=7, ncol=min(4, len(labels)))
-    _add_footer(fig, info)
-    outdir.mkdir(parents=True, exist_ok=True)
-    fn = outdir / f"input_{_safe_fname(name)}.png"
-    fig.savefig(fn, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    return fn
+    series = [(data[:, i], labels[i]) for i in range(data.shape[1])]
+    return _single_line_plot(
+        time_s,
+        series,
+        title=f"Policy input – {name}",
+        xlabel="time [s]",
+        ylabel=None,
+        png_name=f"input_{_safe_fname(name)}.png",
+        outdir=outdir,
+        run_info=info,
+        legend_kwargs={"loc": "upper right", "fontsize": 7, "ncol": min(4, len(labels))},
+    )
 
 
 def render_artifacts(episode: EpisodeData, run_info: RunInfo, output_dir: Path) -> list[Path]:
