@@ -1,6 +1,7 @@
 """Pure numeric metrics from EpisodeData."""
 
 import numpy as np
+from typing import Sequence
 
 from kinfer_evals.core.eval_types import EpisodeData
 from kinfer_evals.reference_state import ReferenceStateTracker
@@ -19,6 +20,61 @@ def yaw_from_quat_wxyz(quat: np.ndarray) -> np.ndarray:
     """Extract yaw from quaternions (w,x,y,z) per row."""
     w, x, y, z = quat[:, 0], quat[:, 1], quat[:, 2], quat[:, 3]
     return np.arctan2(2 * (w * z + x * y), 1 - 2 * (y**2 + z**2)).astype(np.float32)
+
+
+def compute_gait_frequency(foot_con: Sequence[set], dt: float, cmd_vel: np.ndarray) -> dict[int, float]:
+    """Return {strike_index -> gait_frequency_Hz} using per-foot strike-to-strike periods.
+
+    A "strike" is a 0→1 transition in that foot's contact state. Only count periods
+    while the command is non-zero (moving_mask).
+    """
+    if not foot_con:
+        return {}
+
+    foot_ids = set().union(*foot_con) if foot_con else set()
+    T = len(foot_con)
+
+    # Per-foot 0/1 contact arrays
+    foot_states = {
+        fid: np.array([1 if fid in s else 0 for s in foot_con], dtype=np.uint8)
+        for fid in foot_ids
+    }
+
+    # Rising edges
+    strikes = {fid: np.where((arr[1:] == 1) & (arr[:-1] == 0))[0] for fid, arr in foot_states.items()}
+    moving_mask = np.any(np.abs(cmd_vel) > 1e-6, axis=1) if cmd_vel.size else np.zeros(T, dtype=bool)
+
+    periods = {}
+    for _, idxs in strikes.items():
+        if idxs.size < 2:
+            continue
+        intervals = np.diff(idxs) * dt
+        for i, interval in zip(idxs[:-1], intervals):
+            if i < len(moving_mask) and moving_mask[i] and interval > 0:
+                periods[i] = interval
+    return {k: 1.0 / v for k, v in periods.items() if v > 0}
+
+
+def compute_double_support_intervals(n_feet_con: Sequence[int], dt: float, cmd_vel: np.ndarray) -> dict[int, float]:
+    """Return {index_of_interval_end -> seconds} for spans where exactly 2 feet are in contact.
+
+    Resets the counter whenever the command is zero (standing).
+    """
+    if len(n_feet_con) == 0:
+        return {}
+    moving_mask = np.any(np.abs(cmd_vel) > 1e-6, axis=1) if cmd_vel.size else np.zeros(len(n_feet_con), dtype=bool)
+    carry = 0
+    out: dict[int, float] = {}
+    for i, n in enumerate(n_feet_con):
+        if not moving_mask[i]:
+            carry = 0
+            continue
+        if n == 2:
+            carry += 1
+        elif carry > 0:
+            out[i] = carry * dt
+            carry = 0
+    return out
 
 
 def compute_metrics(ep: EpisodeData) -> dict[str, float]:
@@ -81,6 +137,11 @@ def compute_metrics(ep: EpisodeData) -> dict[str, float]:
     omega_actual = np.diff(yaw_world_unwrapped) / dt
     omega_error = omega_actual - command_omega[:-1]
 
+    # Gait metrics (treat any contacted body id > 0 as a "foot")
+    foot_con = [set(map(int, arr[arr > 0])) for arr in ep.contact_body]
+    gait_freqs = compute_gait_frequency(foot_con, dt, ep.cmd_vel)
+    mean_gait_freq = float(np.mean(list(gait_freqs.values()))) if gait_freqs else 0.0
+
     def mae(x: np.ndarray) -> float:
         return float(np.mean(np.abs(x))) if x.size else 0.0
 
@@ -107,5 +168,7 @@ def compute_metrics(ep: EpisodeData) -> dict[str, float]:
         "mae_omega": mae(omega_error),
         "rmse_omega": rmse(omega_error),
         "omega_samples": int(omega_error.size),
+        # gait
+        "mean_gait_freq": mean_gait_freq,
     }
     return summary

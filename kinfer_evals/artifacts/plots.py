@@ -9,11 +9,17 @@ from typing import Sequence
 import numpy as np
 from kinfer_sim.server import load_joint_names
 from matplotlib import colors, pyplot as plt
+from matplotlib.ticker import MaxNLocator
 from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
 
 from kinfer_evals.core.eval_types import EpisodeData, RunInfo
-from kinfer_evals.core.metrics import body_frame_vel, yaw_from_quat_wxyz
+from kinfer_evals.core.metrics import (
+    body_frame_vel,
+    yaw_from_quat_wxyz,
+    compute_gait_frequency,
+    compute_double_support_intervals,
+)
 from kinfer_evals.reference_state import ReferenceStateTracker
 
 # Shared defaults
@@ -364,6 +370,72 @@ def plot_contact_force_per_body(
     return paths
 
 
+def plot_n_feet_in_contact(
+    time_s: np.ndarray,
+    n_foot_con: np.ndarray,
+    outdir: Path,
+    info: RunInfo,
+) -> Path:
+    fig, ax = plt.subplots(figsize=_FIGSIZE_SINGLE)
+    fig.tight_layout(rect=(0, 0.20, 1, 1))
+    ax.plot(time_s, n_foot_con, linewidth=1)
+    ax.set_xlabel("time [s]")
+    ax.set_ylabel("# feet in contact")
+    ax.set_title("Number of feet in contact")
+    ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+    return _finalize_and_save(fig, outdir, "n_feet_in_contact.png", info)
+
+
+def plot_gait_frequency(
+    time_s: np.ndarray,
+    gait_frequencies: dict[int, float],
+    outdir: Path,
+    info: RunInfo,
+) -> Path:
+    fig, ax = plt.subplots(figsize=_FIGSIZE_SINGLE)
+    fig.tight_layout(rect=(0, 0.20, 1, 1))
+    strike_idx = sorted(gait_frequencies.keys())
+    times = np.array([time_s[i] for i in strike_idx])
+    freqs = np.array([gait_frequencies[i] for i in strike_idx])
+    ax.bar(times, freqs, width=0.05, alpha=0.6, label="Instantaneous")
+    if freqs.size:
+        mean_f = float(np.mean(freqs))
+        ax.axhline(mean_f, linestyle="--", linewidth=2, label=f"Mean ({mean_f:.2f} Hz)")
+    ax.set_xlabel("time [s]")
+    ax.set_ylabel("Frequency [Hz]")
+    ax.set_title("Gait frequency over time (gaps = stand cmd)")
+    ax.legend(loc="upper right")
+    ax.set_xlim(time_s[0] - 0.5, time_s[-1] + 0.5)
+    if freqs.size:
+        ax.set_ylim(min(freqs) * 0.9 if np.isfinite(freqs).all() else 0.0, max(freqs) * 1.1)
+    return _finalize_and_save(fig, outdir, "gait_frequency.png", info)
+
+
+def plot_double_support_intervals(
+    time_s: np.ndarray,
+    double_support_intervals: dict[int, float],
+    outdir: Path,
+    info: RunInfo,
+) -> Path:
+    fig, ax = plt.subplots(figsize=_FIGSIZE_SINGLE)
+    fig.tight_layout(rect=(0, 0.20, 1, 1))
+    idx = sorted(double_support_intervals.keys())
+    times = np.array([time_s[i] for i in idx if i < len(time_s)])
+    vals = np.array([double_support_intervals[i] for i in idx if i < len(time_s)])
+    ax.bar(times, vals, width=0.05, alpha=0.6, label="Double support")
+    if vals.size:
+        mean_v = float(np.mean(vals))
+        ax.axhline(mean_v, linestyle="--", linewidth=2, label=f"Mean ({mean_v:.2f})")
+    ax.set_xlabel("time [s]")
+    ax.set_ylabel("Double support interval")
+    ax.set_title("Double support intervals over time")
+    ax.legend(loc="upper right")
+    ax.set_xlim(time_s[0] - 0.5, time_s[-1] + 0.5)
+    if vals.size:
+        ax.set_ylim(min(vals) * 0.9 if np.isfinite(vals).all() else 0.0, max(vals) * 1.1)
+    return _finalize_and_save(fig, outdir, "double_support_intervals.png", info)
+
+
 def plot_input_series(
     time_s: np.ndarray,
     data: np.ndarray,  # (T, N)
@@ -498,6 +570,25 @@ def render_artifacts(episode: EpisodeData, run_info: RunInfo, output_dir: Path) 
     artifact_paths.append(
         _plot_xy_trajectory(ref_pos_x, ref_pos_y, episode.qpos[:, 0], episode.qpos[:, 1], plots_dir, run_info)
     )
+
+    # Treat every contacted body id (>0) as a "foot";
+    foot_con = [set(map(int, arr[arr > 0])) for arr in episode.contact_body]
+    n_foot_con = np.array([len(s) for s in foot_con], dtype=int)
+    artifact_paths.append(
+        plot_n_feet_in_contact(time_s, n_foot_con, plots_dir, run_info)
+    )
+
+    gait_freqs = compute_gait_frequency(foot_con, dt, episode.cmd_vel)
+    if gait_freqs:
+        artifact_paths.append(
+            plot_gait_frequency(time_s, gait_freqs, plots_dir, run_info)
+        )
+
+    ds_intervals = compute_double_support_intervals(n_foot_con, dt, episode.cmd_vel)
+    if ds_intervals:
+        artifact_paths.append(
+            plot_double_support_intervals(time_s, ds_intervals, plots_dir, run_info)
+        )
 
     if episode.inputs:
         label_suggestions: dict[str, list[str]] = {
