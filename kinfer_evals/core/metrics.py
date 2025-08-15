@@ -1,7 +1,8 @@
 """Pure numeric metrics from EpisodeData."""
 
-import numpy as np
 from typing import Sequence
+
+import numpy as np
 
 from kinfer_evals.core.eval_types import EpisodeData
 from kinfer_evals.reference_state import ReferenceStateTracker
@@ -35,10 +36,7 @@ def compute_gait_frequency(foot_con: Sequence[set], dt: float, cmd_vel: np.ndarr
     T = len(foot_con)
 
     # Per-foot 0/1 contact arrays
-    foot_states = {
-        fid: np.array([1 if fid in s else 0 for s in foot_con], dtype=np.uint8)
-        for fid in foot_ids
-    }
+    foot_states = {fid: np.array([1 if fid in s else 0 for s in foot_con], dtype=np.uint8) for fid in foot_ids}
 
     # Rising edges
     strikes = {fid: np.where((arr[1:] == 1) & (arr[:-1] == 0))[0] for fid, arr in foot_states.items()}

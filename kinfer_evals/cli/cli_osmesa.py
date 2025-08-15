@@ -1,6 +1,5 @@
 # kinfer_evals/cli_osmesa.py
-"""
-CLI entry point for running kinfer-evals with software (OSMesa) rendering.
+"""CLI entry point for running kinfer-evals with software (OSMesa) rendering.
 
 It:
 - Forces OSMesa GL (good for VMs / no GPU).
@@ -10,9 +9,8 @@ It:
   Disable by setting USE_LIBSTDCXX_PRELOAD=0.
 """
 
-import os
-import sys
 import ctypes
+import os
 from ctypes.util import find_library
 
 
@@ -58,6 +56,7 @@ def main():
     _setup_osmesa_env()
     # Delegate to your existing argparse-based runner
     from kinfer_evals.cli.eval_runner import main as eval_main
+
     eval_main()
 
 

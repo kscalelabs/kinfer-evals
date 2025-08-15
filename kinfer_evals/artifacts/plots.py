@@ -9,16 +9,16 @@ from typing import Sequence
 import numpy as np
 from kinfer_sim.server import load_joint_names
 from matplotlib import colors, pyplot as plt
-from matplotlib.ticker import MaxNLocator
 from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
+from matplotlib.ticker import MaxNLocator
 
 from kinfer_evals.core.eval_types import EpisodeData, RunInfo
 from kinfer_evals.core.metrics import (
     body_frame_vel,
-    yaw_from_quat_wxyz,
-    compute_gait_frequency,
     compute_double_support_intervals,
+    compute_gait_frequency,
+    yaw_from_quat_wxyz,
 )
 from kinfer_evals.reference_state import ReferenceStateTracker
 
@@ -574,21 +574,15 @@ def render_artifacts(episode: EpisodeData, run_info: RunInfo, output_dir: Path) 
     # Treat every contacted body id (>0) as a "foot";
     foot_con = [set(map(int, arr[arr > 0])) for arr in episode.contact_body]
     n_foot_con = np.array([len(s) for s in foot_con], dtype=int)
-    artifact_paths.append(
-        plot_n_feet_in_contact(time_s, n_foot_con, plots_dir, run_info)
-    )
+    artifact_paths.append(plot_n_feet_in_contact(time_s, n_foot_con, plots_dir, run_info))
 
     gait_freqs = compute_gait_frequency(foot_con, dt, episode.cmd_vel)
     if gait_freqs:
-        artifact_paths.append(
-            plot_gait_frequency(time_s, gait_freqs, plots_dir, run_info)
-        )
+        artifact_paths.append(plot_gait_frequency(time_s, gait_freqs, plots_dir, run_info))
 
     ds_intervals = compute_double_support_intervals(n_foot_con, dt, episode.cmd_vel)
     if ds_intervals:
-        artifact_paths.append(
-            plot_double_support_intervals(time_s, ds_intervals, plots_dir, run_info)
-        )
+        artifact_paths.append(plot_double_support_intervals(time_s, ds_intervals, plots_dir, run_info))
 
     if episode.inputs:
         label_suggestions: dict[str, list[str]] = {
