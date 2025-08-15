@@ -37,9 +37,11 @@ setup(
     tests_require=requirements_dev,
     extras_require={"dev": requirements_dev},
     packages=["kinfer_evals"],
-    # entry_points={
-    #     "console_scripts": [
-    #         "kinfer_evals.cli:main",
-    #     ],
-    # },
+    entry_points={
+        "console_scripts": [
+            "kinfer-eval=kinfer_evals.cli.eval_runner:main",
+            # for osmesa GL setup
+            "kinfer-eval-osmesa = kinfer_evals.cli.cli_osmesa:main",
+        ],
+    },
 )
