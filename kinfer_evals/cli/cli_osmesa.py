@@ -14,7 +14,7 @@ import os
 from ctypes.util import find_library
 
 
-def _preload_libstdcxx():
+def _preload_libstdcxx() -> None:
     # Skip if user opts out
     if os.environ.get("USE_LIBSTDCXX_PRELOAD", "1") != "1":
         return
@@ -37,7 +37,7 @@ def _preload_libstdcxx():
             continue
 
 
-def _setup_osmesa_env():
+def _setup_osmesa_env() -> None:
     # Force software rendering
     os.environ.setdefault("MUJOCO_GL", "osmesa")
     os.environ["PYOPENGL_PLATFORM"] = "osmesa"
@@ -51,11 +51,11 @@ def _setup_osmesa_env():
         os.environ.pop(k, None)
 
 
-def main():
+def main() -> None:
     _preload_libstdcxx()
     _setup_osmesa_env()
     # Delegate to your existing argparse-based runner
-    from kinfer_evals.cli.eval_runner import main as eval_main
+    from kinfer_evals.cli.eval_runner import main as eval_main  # noqa: PLC0415
 
     eval_main()
 

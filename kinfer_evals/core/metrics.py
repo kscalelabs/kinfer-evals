@@ -33,14 +33,14 @@ def compute_gait_frequency(foot_con: Sequence[set], dt: float, cmd_vel: np.ndarr
         return {}
 
     foot_ids = set().union(*foot_con) if foot_con else set()
-    T = len(foot_con)
+    t = len(foot_con)
 
     # Per-foot 0/1 contact arrays
     foot_states = {fid: np.array([1 if fid in s else 0 for s in foot_con], dtype=np.uint8) for fid in foot_ids}
 
     # Rising edges
     strikes = {fid: np.where((arr[1:] == 1) & (arr[:-1] == 0))[0] for fid, arr in foot_states.items()}
-    moving_mask = np.any(np.abs(cmd_vel) > 1e-6, axis=1) if cmd_vel.size else np.zeros(T, dtype=bool)
+    moving_mask = np.any(np.abs(cmd_vel) > 1e-6, axis=1) if cmd_vel.size else np.zeros(t, dtype=bool)
 
     periods = {}
     for _, idxs in strikes.items():
