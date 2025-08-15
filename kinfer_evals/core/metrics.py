@@ -53,7 +53,7 @@ def compute_gait_frequency(foot_con: Sequence[set], dt: float, cmd_vel: np.ndarr
     return {k: 1.0 / v for k, v in periods.items() if v > 0}
 
 
-def compute_double_support_intervals(n_feet_con: Sequence[int], dt: float, cmd_vel: np.ndarray) -> dict[int, float]:
+def compute_double_support_intervals(n_feet_con: np.ndarray, dt: float, cmd_vel: np.ndarray) -> dict[int, float]:
     """Return {index_of_interval_end -> seconds} for spans where exactly 2 feet are in contact.
 
     Resets the counter whenever the command is zero (standing).
