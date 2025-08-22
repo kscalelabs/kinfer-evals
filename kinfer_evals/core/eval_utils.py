@@ -16,8 +16,25 @@ from kinfer_evals.core.eval_types import CommandFactory
 
 
 def cmd(vx: float = 0.0, yaw: float = 0.0) -> list[float]:
-    """Return a 6-D ExpandedControlVector (vx, vy, yaw, h, roll, pitch)."""
-    return [vx, 0.0, yaw]
+    """Return a 16-D control vector matching ControlVectorInputState.
+
+    Indices:
+    0: vx [m/s]
+    1: vy [m/s]
+    2: yaw rate [rad/s]
+    3: base height offset [m]
+    4: base roll [rad]
+    5: base pitch [rad]
+    6-10: right arm (shoulder pitch, shoulder roll, elbow pitch, elbow roll, wrist pitch) [rad]
+    11-15: left arm (shoulder pitch, shoulder roll, elbow pitch, elbow roll, wrist pitch) [rad]
+
+    Only the first `model_num_commands` are consumed by the model; the rest
+    are ignored if the model expects fewer.
+    """
+    vec = [0.0] * 16
+    vec[0] = float(vx)
+    vec[2] = float(yaw)
+    return vec
 
 
 def ramp(start: float, end: float, duration_s: float, freq_hz: float) -> list[float]:

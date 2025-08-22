@@ -40,7 +40,7 @@ async def _run_episode_to_h5(
     sim, runner, provider = await load_sim_and_runner(
         args.kinfer,
         args.robot,
-        cmd_factory=lambda: PrecomputedInputState([[0.0, 0.0, 0.0]]),
+        cmd_factory=lambda: PrecomputedInputState([[0.0] * 16]),
         render=args.render,
         free_camera=False,
     )
