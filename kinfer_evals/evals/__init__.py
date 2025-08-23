@@ -17,4 +17,5 @@ from . import (
     stand_still,  # noqa: E402,F401
     walk_forward,  # noqa: E402,F401
     walk_forward_right,  # noqa: E402,F401
+    walk_1ms,  # noqa: E402,F401
 )
