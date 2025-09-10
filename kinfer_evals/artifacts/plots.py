@@ -407,7 +407,7 @@ def plot_gait_frequency(
     ax.legend(loc="upper right")
     ax.set_xlim(time_s[0] - 0.5, time_s[-1] + 0.5)
     if freqs.size:
-        ax.set_ylim(min(freqs) * 0.9 if np.isfinite(freqs).all() else 0.0, max(freqs) * 1.1)
+        ax.set_ylim(0.0, max(freqs) * 1.1)
     return _finalize_and_save(fig, outdir, "gait_frequency.png", info)
 
 
@@ -432,7 +432,7 @@ def plot_double_support_intervals(
     ax.legend(loc="upper right")
     ax.set_xlim(time_s[0] - 0.5, time_s[-1] + 0.5)
     if vals.size:
-        ax.set_ylim(min(vals) * 0.9 if np.isfinite(vals).all() else 0.0, max(vals) * 1.1)
+        ax.set_ylim(0.0, max(vals) * 1.1)
     return _finalize_and_save(fig, outdir, "double_support_intervals.png", info)
 
 
