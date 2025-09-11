@@ -27,10 +27,30 @@ def main() -> None:
         action="store_true",
         help="Render the eval in a window using the K-Scale Mujoco viewer",
     )
+    parser.add_argument(
+        "--local-model-dir",
+        type=Path,
+        default=None,
+        help="Path to a local robot URDF/MJCF directory to use instead of downloading",
+    )
+    parser.add_argument(
+        "--command-type",
+        type=str,
+        default=None,
+        help="Passthrough command type (e.g., 'unified'); reserved for future evals",
+    )
 
     ns = parser.parse_args()
     make = REGISTRY[ns.eval]
-    args = RunArgs(ns.eval, ns.kinfer, ns.robot, ns.out, ns.render)
+    args = RunArgs(
+        ns.eval,
+        ns.kinfer,
+        ns.robot,
+        ns.out,
+        ns.render,
+        local_model_dir=ns.local_model_dir,
+        command_type=ns.command_type,
+    )
     url = asyncio.run(run_eval(make, ns.eval, args))
     if url:
         print(url)

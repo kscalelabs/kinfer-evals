@@ -23,6 +23,10 @@ class RunArgs:
     robot: str
     out: Path
     render: bool = False
+    # Optional: use a local, pre-downloaded URDF/MJCF directory instead of fetching
+    local_model_dir: Path | None = None
+    # Optional: passthrough for command type (currently unused by evals but accepted)
+    command_type: str | None = None
 
 
 class CommandFactory(Protocol):

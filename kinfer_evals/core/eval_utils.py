@@ -2,7 +2,7 @@
 
 import asyncio
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Optional, Union, cast
 
 import numpy as np
 from kinfer.rust_bindings import PyModelRunner
@@ -81,11 +81,20 @@ async def load_sim_and_runner(
     **sim_kwargs: object,
 ) -> tuple[MujocoSimulator, PyModelRunner, ModelProvider]:
     """Shared download + construction logic."""
-    async with K() as api:
-        model_dir, meta = await asyncio.gather(
-            api.download_and_extract_urdf(robot, cache=True),
-            get_model_metadata(api, robot),
-        )
+    # Optional overrides via sim_kwargs from RunArgs: local_model_dir
+    local_model_dir_obj: Optional[Union[str, Path]] = cast(
+        Optional[Union[str, Path]], sim_kwargs.pop("local_model_dir", None)
+    )
+    if local_model_dir_obj is not None:
+        model_dir = Path(local_model_dir_obj)
+        async with K() as api:
+            meta = await get_model_metadata(api, robot)
+    else:
+        async with K() as api:
+            model_dir, meta = await asyncio.gather(
+                api.download_and_extract_urdf(robot, cache=True),
+                get_model_metadata(api, robot),
+            )
 
     mjcf = find_mjcf(model_dir)
     sim = make_sim(mjcf, meta, **sim_kwargs)
