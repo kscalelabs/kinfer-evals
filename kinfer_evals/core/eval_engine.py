@@ -110,7 +110,7 @@ async def run_eval(
     notion_url: str | None = None
     combined = {**run_info, **metrics, "notion_url": notion_url or ""}
     # Optional metadata
-    if getattr(args, "local_model_dir", None):
+    if args.local_model_dir is not None:
         combined["local_model_dir"] = str(Path(args.local_model_dir).absolute())
     if getattr(args, "command_type", None):
         combined["command_type"] = args.command_type
