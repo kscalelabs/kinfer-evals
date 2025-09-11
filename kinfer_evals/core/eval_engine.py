@@ -43,6 +43,7 @@ async def _run_episode_to_h5(
         cmd_factory=lambda: PrecomputedInputState([[0.0] * 16]),
         render=args.render,
         free_camera=False,
+        local_model_dir=args.local_model_dir,
     )
 
     # Prepare commands
@@ -108,6 +109,11 @@ async def run_eval(
     # Save combined summary
     notion_url: str | None = None
     combined = {**run_info, **metrics, "notion_url": notion_url or ""}
+    # Optional metadata
+    if getattr(args, "local_model_dir", None):
+        combined["local_model_dir"] = str(Path(args.local_model_dir).absolute())
+    if getattr(args, "command_type", None):
+        combined["command_type"] = args.command_type
     summary_path = outdir / "run_summary.json"
     summary_path.write_text(json.dumps(combined, indent=2))
     logger.info("Saved combined summary to %s", summary_path)
