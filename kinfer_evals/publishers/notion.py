@@ -1,5 +1,6 @@
 """Push results to Notion."""
 
+import logging
 import mimetypes
 import os
 import pathlib
@@ -9,6 +10,8 @@ from zoneinfo import ZoneInfo
 
 import requests
 from notion_client import Client
+
+logger = logging.getLogger(__name__)
 
 NOTION_TOKEN = os.getenv("NOTION_API_KEY")
 DB_ID = os.getenv("NOTION_DB_ID")
@@ -23,28 +26,32 @@ def _hdr() -> dict[str, str]:
     }
 
 
-def _upload_file(path: pathlib.Path) -> str:
+def _upload_file(path: pathlib.Path, session: requests.Session) -> str:
     """Upload *path* (≤20 MB) to Notion and return its file_upload.id."""
+    logger.info("Uploading file: %s (%.2f MB)", path.name, path.stat().st_size / 1024 / 1024)
     mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
 
-    r = requests.post(
+    r = session.post(
         "https://api.notion.com/v1/file_uploads",
         json={"filename": path.name, "content_type": mime},
         headers=_hdr() | {"content-type": "application/json"},
+        timeout=30,
     )
     r.raise_for_status()
     obj = r.json()
     upload_id = obj["id"]
+    logger.info("Got upload ID for %s: %s", path.name, upload_id)
 
     with open(path, "rb") as fh:
         files = {"file": (path.name, fh, mime)}
-        r2 = requests.post(
+        r2 = session.post(
             f"https://api.notion.com/v1/file_uploads/{upload_id}/send",
             files=files,
             headers=_hdr(),
-            timeout=30,
+            timeout=60,  # Increased timeout for large files
         )
     r2.raise_for_status()
+    logger.info("Successfully uploaded file: %s", path.name)
     return upload_id
 
 
@@ -134,38 +141,61 @@ def push_summary(
     props["submitted"] = {"date": {"start": stamp_ca.isoformat()}}
 
     page = cast(dict[str, object], notion.pages.create(parent={"database_id": DB_ID}, properties=props))
+    logger.info("Created Notion page: %s", page["url"])
 
-    if files:
-        # Put videos first, then all other files
-        files_sorted = sorted(files, key=lambda p: (p.suffix.lower() not in {".mp4", ".mov", ".mkv", ".webm"}, p.name))
+    # Use a session to manage connections properly and ensure cleanup
+    session = requests.Session()
+    try:
+        if files:
+            logger.info("Uploading %d files to Notion page", len(files))
+            # Put videos first, then all other files
+            files_sorted = sorted(files, key=lambda p: (p.suffix.lower() not in {".mp4", ".mov", ".mkv", ".webm"}, p.name))
 
-        children: list[dict[str, object]] = []
-        for p in files_sorted:
-            fid = _upload_file(p)
-            ext = p.suffix.lower()
-            if ext in {".png", ".jpg", ".jpeg", ".gif"}:
-                block_type = "image"
-            elif ext in {".mp4", ".mov", ".mkv", ".webm"}:
-                block_type = "video"
+            children: list[dict[str, object]] = []
+            for i, p in enumerate(files_sorted, 1):
+                try:
+                    logger.info("Uploading file %d/%d: %s", i, len(files_sorted), p.name)
+                    fid = _upload_file(p, session)
+                    ext = p.suffix.lower()
+                    if ext in {".png", ".jpg", ".jpeg", ".gif"}:
+                        block_type = "image"
+                    elif ext in {".mp4", ".mov", ".mkv", ".webm"}:
+                        block_type = "video"
+                    else:
+                        block_type = "file"
+
+                    children.append(
+                        {
+                            "object": "block",
+                            "type": block_type,
+                            block_type: {
+                                "type": "file_upload",
+                                "file_upload": {"id": fid},
+                                "caption": [{"type": "text", "text": {"content": p.name}}],
+                            },
+                        }
+                    )
+                except Exception as e:
+                    logger.error("Failed to upload file %s: %s", p.name, e)
+                    # Continue with other files instead of failing completely
+                    continue
+            
+            if children:
+                logger.info("Attaching %d uploaded files to Notion page", len(children))
+                # append in a single PATCH
+                resp = session.patch(
+                    f"https://api.notion.com/v1/blocks/{page['id']}/children",
+                    json={"children": children},
+                    headers=_hdr() | {"Content-Type": "application/json"},
+                    timeout=60,
+                )
+                resp.raise_for_status()
+                logger.info("Successfully attached all files to Notion page")
             else:
-                block_type = "file"
-
-            children.append(
-                {
-                    "object": "block",
-                    "type": block_type,
-                    block_type: {
-                        "type": "file_upload",
-                        "file_upload": {"id": fid},
-                        "caption": [{"type": "text", "text": {"content": p.name}}],
-                    },
-                }
-            )
-        # append in a single PATCH
-        requests.patch(
-            f"https://api.notion.com/v1/blocks/{page['id']}/children",
-            json={"children": children},
-            headers=_hdr() | {"Content-Type": "application/json"},
-        ).raise_for_status()
+                logger.warning("No files were successfully uploaded")
+    finally:
+        # Explicitly close the session to clean up connections
+        session.close()
+        logger.info("Closed requests session")
 
     return str(page["url"])
