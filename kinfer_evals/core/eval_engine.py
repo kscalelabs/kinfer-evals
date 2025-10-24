@@ -146,4 +146,5 @@ async def run_eval(
     except Exception as exc:
         logger.warning("Failed to push results to Notion: %s", exc)
 
+    logger.info("run_eval completing, returning notion_url")
     return notion_url

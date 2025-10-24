@@ -5,6 +5,7 @@ CLI driver:  kinfer-eval  <policy>  <robot>  <eval-name>  [--out] [--render]
 
 import argparse
 import asyncio
+import logging
 from pathlib import Path
 
 import colorlogging
@@ -12,6 +13,8 @@ from kmotions.motions import MOTIONS
 
 from kinfer_evals.core.eval_engine import run_eval
 from kinfer_evals.core.eval_types import RunArgs
+
+logger = logging.getLogger(__name__)
 
 
 def main() -> None:
@@ -50,9 +53,12 @@ def main() -> None:
         local_model_dir=ns.local_model_dir,
         command_type=ns.command_type,
     )
+    logger.info("Starting asyncio.run(run_eval)...")
     url = asyncio.run(run_eval(ns.motion, args))
+    logger.info("asyncio.run completed, url=%s", url)
     if url:
         print(url)
+    logger.info("eval_runner main() exiting")
 
 
 if __name__ == "__main__":

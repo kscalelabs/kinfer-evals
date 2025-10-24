@@ -207,6 +207,17 @@ class EpisodeRollout:
                 await asyncio.sleep(0)
                 step_idx += 1
         finally:
+            logger.info("Cleaning up rollout resources...")
+            # Clean up runner first
+            if hasattr(self._runner, "close"):
+                logger.info("Closing PyModelRunner...")
+                self._runner.close()
+            
+            # Clean up sinks
             for sink in self._sinks:
                 sink.close()
+            
+            # Clean up simulator last
+            logger.info("Closing simulator...")
             await self._sim.close()
+            logger.info("Rollout cleanup complete")
