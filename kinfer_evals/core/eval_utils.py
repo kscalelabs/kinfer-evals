@@ -1,6 +1,9 @@
 """Shared utilities for running evals."""
 
 import asyncio
+import json
+import logging
+import tarfile
 from pathlib import Path
 from typing import Callable, Optional, Union, cast
 
@@ -12,36 +15,35 @@ from kinfer_sim.simulator import MujocoSimulator
 from kscale import K
 from kscale.web.gen.api import RobotURDFMetadataOutput
 
-from kinfer_evals.core.eval_types import CommandFactory
+from kinfer_evals.core.eval_types import CommandFactory, CommandProvider
+
+logger = logging.getLogger(__name__)
 
 
-def cmd(vx: float = 0.0, yaw: float = 0.0) -> list[float]:
-    """Return a 16-D control vector matching ControlVectorInputState.
-
-    Indices:
-    0: vx [m/s]
-    1: vy [m/s]
-    2: yaw rate [rad/s]
-    3: base height offset [m]
-    4: base roll [rad]
-    5: base pitch [rad]
-    6-10: right arm (shoulder pitch, shoulder roll, elbow pitch, elbow roll, wrist pitch) [rad]
-    11-15: left arm (shoulder pitch, shoulder roll, elbow pitch, elbow roll, wrist pitch) [rad]
-
-    Only the first `model_num_commands` are consumed by the model; the rest
-    are ignored if the model expects fewer.
+def load_command_names(kinfer_path: Path) -> list[str]:
+    """Load command_names from kinfer metadata.json.
+    
+    Args:
+        kinfer_path: Path to the .kinfer file
+        
+    Returns:
+        List of command names
     """
-    vec = [0.0] * 16
-    vec[0] = float(vx)
-    vec[2] = float(yaw)
-    return vec
+    try:
+        with tarfile.open(kinfer_path, "r:gz") as tar:
+            metadata_file = tar.extractfile("metadata.json")
+            if metadata_file is None:
+                raise FileNotFoundError("'metadata.json' not found in archive")
+            metadata = json.loads(metadata_file.read().decode("utf-8"))
+    except (tarfile.TarError, FileNotFoundError) as exc:
+        raise ValueError(f"Could not read metadata from {kinfer_path}: {exc}") from exc
 
+    command_names = metadata.get("command_names", None)
+    if not command_names:
+        raise ValueError(f"'command_names' missing in metadata for {kinfer_path}")
 
-def ramp(start: float, end: float, duration_s: float, freq_hz: float) -> list[float]:
-    """Evenly-spaced values from start→end over `duration_s`, at control rate."""
-    n = max(1, int(round(duration_s * freq_hz)))
-    step = (end - start) / n
-    return [start + i * step for i in range(1, n + 1)]
+    logger.info("Loaded %d command names from model metadata", len(command_names))
+    return list(command_names)
 
 
 def get_yaw_from_quaternion(quat: np.ndarray) -> float:
@@ -75,12 +77,15 @@ def default_sim(
 async def load_sim_and_runner(
     kinfer: Path,
     robot: str,
-    cmd_factory: CommandFactory,
+    motion_factory: CommandFactory,
     *,
     make_sim: Callable[..., MujocoSimulator] = default_sim,
     **sim_kwargs: object,
-) -> tuple[MujocoSimulator, PyModelRunner, ModelProvider]:
+) -> tuple[MujocoSimulator, PyModelRunner, CommandProvider, ModelProvider]:
     """Shared download + construction logic."""
+    # Load command_names from kinfer metadata
+    command_names = load_command_names(kinfer)
+    
     # Optional overrides via sim_kwargs from RunArgs: local_model_dir
     local_model_dir_obj: Optional[Union[str, Path]] = cast(
         Optional[Union[str, Path]], sim_kwargs.pop("local_model_dir", None)
@@ -98,6 +103,14 @@ async def load_sim_and_runner(
 
     mjcf = find_mjcf(model_dir)
     sim = make_sim(mjcf, meta, **sim_kwargs)
-    provider = ModelProvider(sim, keyboard_state=cmd_factory())
-    runner = PyModelRunner(str(kinfer), provider)
-    return sim, runner, provider
+    
+    # Create motion with dt based on sim control frequency
+    dt = 1.0 / sim._control_frequency
+    motion = motion_factory(dt)
+    
+    # Create command provider with motion and command_names
+    command_provider = CommandProvider(motion, command_names)
+    # ModelProvider now takes command_provider instead of keyboard_state
+    provider = ModelProvider(sim, command_provider=command_provider)
+    runner = PyModelRunner(str(kinfer), provider, pre_fetch_time_ms=None)
+    return sim, runner, command_provider, provider

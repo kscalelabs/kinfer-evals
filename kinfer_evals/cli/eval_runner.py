@@ -8,10 +8,10 @@ import asyncio
 from pathlib import Path
 
 import colorlogging
+from kmotions.motions import MOTIONS
 
 from kinfer_evals.core.eval_engine import run_eval
 from kinfer_evals.core.eval_types import RunArgs
-from kinfer_evals.evals import REGISTRY
 
 
 def main() -> None:
@@ -20,7 +20,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(prog="kinfer-eval")
     parser.add_argument("kinfer", type=Path)
     parser.add_argument("robot")
-    parser.add_argument("eval", choices=sorted(REGISTRY.keys()))
+    parser.add_argument("motion", choices=sorted(MOTIONS.keys()), help="Motion name from kmotions")
     parser.add_argument("--out", type=Path, default=Path("runs"))
     parser.add_argument(
         "--render",
@@ -41,9 +41,8 @@ def main() -> None:
     )
 
     ns = parser.parse_args()
-    make = REGISTRY[ns.eval]
     args = RunArgs(
-        ns.eval,
+        ns.motion,
         ns.kinfer,
         ns.robot,
         ns.out,
@@ -51,7 +50,7 @@ def main() -> None:
         local_model_dir=ns.local_model_dir,
         command_type=ns.command_type,
     )
-    url = asyncio.run(run_eval(make, ns.eval, args))
+    url = asyncio.run(run_eval(ns.motion, args))
     if url:
         print(url)
 

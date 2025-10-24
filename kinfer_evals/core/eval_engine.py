@@ -7,13 +7,14 @@ from pathlib import Path
 
 from kmv.app.viewer import DefaultMujocoViewer
 
+from kmotions.motions import MOTIONS
+
 from kinfer_evals.artifacts.plots import render_artifacts
-from kinfer_evals.core.eval_types import PrecomputedInputState, RunArgs, RunInfo
+from kinfer_evals.core.eval_types import RunArgs, RunInfo
 from kinfer_evals.core.eval_utils import load_sim_and_runner
 from kinfer_evals.core.io_h5 import EpisodeReader
 from kinfer_evals.core.metrics import compute_metrics
 from kinfer_evals.core.rollout import EpisodeRollout, H5Sink, StepSink, VideoSink
-from kinfer_evals.evals import CommandMaker
 from kinfer_evals.publishers.notion import push_summary
 
 logger = logging.getLogger(__name__)
@@ -31,26 +32,26 @@ def _build_run_info(args: RunArgs, timestamp: str, outdir: Path) -> RunInfo:
 
 
 async def _run_episode_to_h5(
-    make_cmds: CommandMaker,
+    motion_name: str,
     args: RunArgs,
     outdir: Path,
     run_info: RunInfo,
 ) -> Path:
-    """Spin up sim & runner, play commands, and record to HDF5."""
-    sim, runner, provider = await load_sim_and_runner(
+    """Spin up sim & runner, play motion, and record to HDF5."""
+    # Get the motion factory from kmotions
+    motion_factory = MOTIONS[motion_name]
+    
+    sim, runner, command_provider, provider = await load_sim_and_runner(
         args.kinfer,
         args.robot,
-        cmd_factory=lambda: PrecomputedInputState([[0.0] * 16]),
+        motion_factory=motion_factory,
         render=args.render,
         free_camera=False,
         local_model_dir=args.local_model_dir,
     )
-
-    # Prepare commands
-    freq = sim._control_frequency
-    commands = make_cmds(freq)
-    provider.keyboard_state = PrecomputedInputState(commands)
-    duration_seconds = len(commands) / freq
+    
+    # Run until motion completes (returns None) - determined by rollout
+    duration_seconds = None  # Will run until motion completes
 
     outdir.mkdir(parents=True, exist_ok=True)
     h5_path = outdir / "episode.h5"
@@ -68,14 +69,13 @@ async def _run_episode_to_h5(
         except Exception as exc:
             logger.warning("Failed to init VideoSink: %s", exc)
 
-    rollout = EpisodeRollout(sim, runner, provider, sinks)
+    rollout = EpisodeRollout(sim, runner, command_provider, provider, sinks)
     await rollout.run(duration_seconds)
     return h5_path
 
 
 async def run_eval(
-    make_cmds: "CommandMaker",
-    eval_name: str,
+    motion_name: str,
     args: RunArgs,
 ) -> str | None:
     """Top-level orchestrator.
@@ -86,10 +86,10 @@ async def run_eval(
     4) (optional) publish to Notion
     """
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    outdir = args.out / eval_name / timestamp
+    outdir = args.out / motion_name / timestamp
     run_info = _build_run_info(args, timestamp, outdir)
 
-    h5_path = await _run_episode_to_h5(make_cmds, args, outdir, run_info)
+    h5_path = await _run_episode_to_h5(motion_name, args, outdir, run_info)
 
     # Read & compute
     episode = EpisodeReader.read(h5_path)

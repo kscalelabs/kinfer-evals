@@ -23,7 +23,7 @@ def yaw_from_quat_wxyz(quat: np.ndarray) -> np.ndarray:
     return np.arctan2(2 * (w * z + x * y), 1 - 2 * (y**2 + z**2)).astype(np.float32)
 
 
-def compute_gait_frequency(foot_con: Sequence[set], dt: float, cmd_vel: np.ndarray) -> dict[int, float]:
+def compute_gait_frequency(foot_con: Sequence[set], dt: float, cmd_vels: np.ndarray) -> dict[int, float]:
     """Return {strike_index -> gait_frequency_Hz} using per-foot strike-to-strike periods.
 
     A "strike" is a 0→1 transition in that foot's contact state. Only count periods
@@ -40,7 +40,7 @@ def compute_gait_frequency(foot_con: Sequence[set], dt: float, cmd_vel: np.ndarr
 
     # Rising edges
     strikes = {fid: np.where((arr[1:] == 1) & (arr[:-1] == 0))[0] for fid, arr in foot_states.items()}
-    moving_mask = np.any(np.abs(cmd_vel) > 1e-6, axis=1) if cmd_vel.size else np.zeros(t, dtype=bool)
+    moving_mask = np.any(np.abs(cmd_vels) > 1e-6, axis=1) if cmd_vels.size else np.zeros(t, dtype=bool)
 
     periods = {}
     for _, idxs in strikes.items():
@@ -53,14 +53,14 @@ def compute_gait_frequency(foot_con: Sequence[set], dt: float, cmd_vel: np.ndarr
     return {k: 1.0 / v for k, v in periods.items() if v > 0}
 
 
-def compute_double_support_intervals(n_feet_con: np.ndarray, dt: float, cmd_vel: np.ndarray) -> dict[int, float]:
+def compute_double_support_intervals(n_feet_con: np.ndarray, dt: float, cmd_vels: np.ndarray) -> dict[int, float]:
     """Return {index_of_interval_end -> seconds} for spans where exactly 2 feet are in contact.
 
     Resets the counter whenever the command is zero (standing).
     """
     if len(n_feet_con) == 0:
         return {}
-    moving_mask = np.any(np.abs(cmd_vel) > 1e-6, axis=1) if cmd_vel.size else np.zeros(len(n_feet_con), dtype=bool)
+    moving_mask = np.any(np.abs(cmd_vels) > 1e-6, axis=1) if cmd_vels.size else np.zeros(len(n_feet_con), dtype=bool)
     carry = 0
     out: dict[int, float] = {}
     for i, n in enumerate(n_feet_con):
@@ -101,10 +101,11 @@ def compute_metrics(ep: EpisodeData) -> dict[str, float]:
     # Rotate world-frame velocities into body frame
     body_vx, body_vy = body_frame_vel(ep.qvel, yaw_world)
 
-    # Commanded signals
-    command_vx = ep.cmd_vel[:, 0]
-    command_vy = ep.cmd_vel[:, 1]
-    command_omega = ep.cmd_vel[:, 2]
+    # Commanded signals - extract x, y, yaw from commands dict
+    t = len(time_s)
+    command_vx = ep.commands.get("x", np.zeros(t, dtype=np.float32))
+    command_vy = ep.commands.get("y", np.zeros(t, dtype=np.float32))
+    command_omega = ep.commands.get("yaw", np.zeros(t, dtype=np.float32))
 
     # Velocity errors
     error_vx = body_vx - command_vx
@@ -137,7 +138,9 @@ def compute_metrics(ep: EpisodeData) -> dict[str, float]:
 
     # Gait metrics (treat any contacted body id > 0 as a "foot")
     foot_con = [set(map(int, arr[arr > 0])) for arr in ep.contact_body]
-    gait_freqs = compute_gait_frequency(foot_con, dt, ep.cmd_vel)
+    # Construct cmd_vel array for gait functions (backwards compat)
+    cmd_vel_array = np.column_stack([command_vx, command_vy, command_omega])
+    gait_freqs = compute_gait_frequency(foot_con, dt, cmd_vel_array)
     mean_gait_freq = float(np.mean(list(gait_freqs.values()))) if gait_freqs else 0.0
 
     def mae(x: np.ndarray) -> float:

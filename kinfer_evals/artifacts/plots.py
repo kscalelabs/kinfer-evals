@@ -494,9 +494,9 @@ def render_artifacts(episode: EpisodeData, run_info: RunInfo, output_dir: Path) 
     body_vx, body_vy = body_frame_vel(episode.qvel, yaw_world)
 
     # Calculate velocity/acceleration errors
-    command_vx = episode.cmd_vel[:, 0]
-    command_vy = episode.cmd_vel[:, 1]
-    command_omega = episode.cmd_vel[:, 2]
+    command_vx = episode.commands.get("x", np.zeros(len(time_s), dtype=np.float32))
+    command_vy = episode.commands.get("y", np.zeros(len(time_s), dtype=np.float32))
+    command_omega = episode.commands.get("yaw", np.zeros(len(time_s), dtype=np.float32))
 
     error_vx = body_vx - command_vx
     error_vy = body_vy - command_vy
@@ -576,11 +576,11 @@ def render_artifacts(episode: EpisodeData, run_info: RunInfo, output_dir: Path) 
     n_foot_con = np.array([len(s) for s in foot_con], dtype=int)
     artifact_paths.append(plot_n_feet_in_contact(time_s, n_foot_con, plots_dir, run_info))
 
-    gait_freqs = compute_gait_frequency(foot_con, dt, episode.cmd_vel)
+    gait_freqs = compute_gait_frequency(foot_con, dt, np.column_stack([command_vx, command_vy, command_omega]))
     if gait_freqs:
         artifact_paths.append(plot_gait_frequency(time_s, gait_freqs, plots_dir, run_info))
 
-    ds_intervals = compute_double_support_intervals(n_foot_con, dt, episode.cmd_vel)
+    ds_intervals = compute_double_support_intervals(n_foot_con, dt, np.column_stack([command_vx, command_vy, command_omega]))
     if ds_intervals:
         artifact_paths.append(plot_double_support_intervals(time_s, ds_intervals, plots_dir, run_info))
 

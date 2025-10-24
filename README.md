@@ -1,5 +1,5 @@
 # kinfer-evals
-Evals for kinfer policies 
+Evals for kinfer policies using kmotions
 
 
 ## Installation
@@ -10,16 +10,25 @@ Evals for kinfer policies
 pip install -e . 
 ```
 
-# Usage
+## Usage
 
-Run via 
+Run any motion from kmotions:
 
 ```bash
-kinfer-eval   /path/to/policy.kinfer   robot-name eval_type   --out /path/to/output
+kinfer-eval /path/to/policy.kinfer robot-name motion-name --out /path/to/output
 
-# for example 
-kinfer-eval  ~/policies/frosty_feynman.kinfer   kbot-headless walk_forward_right   --out ~/eval_runs
+# For example, run the walking_and_standing_unittest motion
+kinfer-eval ~/policies/frosty_feynman.kinfer kbot-headless walking_and_standing_unittest --out ~/eval_runs
+
+# Other available motions: wave, salute, pickup, wild_walk, zombie_walk, squats, pirouette, backflip, boxing, etc.
 ```
+
+The eval will:
+1. Load the motion from kmotions
+2. Run it until completion (when the motion returns None)
+3. Record all data to HDF5
+4. Generate plots and metrics
+5. Optionally publish results to Notion
 
 # Troubleshooting 
 

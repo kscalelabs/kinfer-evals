@@ -4,6 +4,7 @@ kinfer-sim
 kscale
 colorlogging
 tabulate
+kmotions>=0.3.8
 
 notion-client
 h5py
