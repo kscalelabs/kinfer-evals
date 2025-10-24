@@ -41,14 +41,6 @@ def main() -> None:
     )
 
     ns = parser.parse_args()
-    print(f"[kinfer-eval] Parsed arguments:")
-    print(f"  kinfer: {ns.kinfer}")
-    print(f"  robot: {ns.robot}")
-    print(f"  motion: {ns.motion}")
-    print(f"  out: {ns.out}")
-    print(f"  render: {ns.render}")
-    print(f"  local_model_dir: {ns.local_model_dir}")
-    
     args = RunArgs(
         ns.motion,
         ns.kinfer,
@@ -58,10 +50,8 @@ def main() -> None:
         local_model_dir=ns.local_model_dir,
         command_type=ns.command_type,
     )
-    print(f"[kinfer-eval] Starting eval run for motion '{ns.motion}'")
     url = asyncio.run(run_eval(ns.motion, args))
     if url:
-        print(f"[kinfer-eval] ✅ Notion URL: {url}")
         print(url)
 
 

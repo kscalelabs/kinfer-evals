@@ -90,14 +90,10 @@ class KinferLogSink:
     def _create_telemetry_symlink(self) -> None:
         """Create a symlink in ~/robot_telemetry/kinfer-evals/{run_name}/"""
         if self._log_path is None or not self._log_path.exists():
-            print(f"[kinfer-log] ⚠️  Log path does not exist, skipping telemetry symlink: {self._log_path}")
             logger.warning("No log path found, skipping telemetry symlink creation")
             return
         
         telemetry_dir = Path.home() / "robot_telemetry" / "kinfer-evals" / self._run_name
-        print(f"[kinfer-log] Creating telemetry symlink...")
-        print(f"[kinfer-log]   Source: {self._log_path}")
-        print(f"[kinfer-log]   Target: {telemetry_dir / 'kinfer_log.ndjson'}")
         try:
             telemetry_dir.mkdir(parents=True, exist_ok=True)
             symlink_path = telemetry_dir / "kinfer_log.ndjson"
@@ -108,10 +104,8 @@ class KinferLogSink:
             
             # Create symlink
             symlink_path.symlink_to(self._log_path.absolute())
-            print(f"[kinfer-log] ✅ Created symlink at: {symlink_path}")
             logger.info("Created symlink at %s", symlink_path)
         except Exception as e:
-            print(f"[kinfer-log] ❌ Failed to create telemetry symlink: {e}")
             logger.warning("Failed to create telemetry symlink: %s", e)
 
 
@@ -153,34 +147,21 @@ class EpisodeRollout:
         self._joint_names = joint_names
 
     async def run(self, seconds: float | None) -> None:
-        print("[rollout] Starting episode rollout")
         dt_ctrl = 1.0 / self._sim._control_frequency
-        print(f"[rollout] Control frequency: {self._sim._control_frequency} Hz (dt={dt_ctrl:.4f}s)")
         
         # If seconds is None, run until motion completes
         if seconds is not None:
             n_ctrl_steps = int(round(seconds * self._sim._control_frequency))
-            print(f"[rollout] Running for {seconds}s ({n_ctrl_steps} steps)")
         else:
             n_ctrl_steps = None  # Run indefinitely until motion completes
-            print(f"[rollout] Running until motion completes")
 
         step_idx = 0
-        print(f"[rollout] Initialized {len(self._sinks)} sinks")
 
         try:
-            print("[rollout] Entering main simulation loop...")
             while n_ctrl_steps is None or step_idx < n_ctrl_steps:
-                # Progress logging every 50 steps
-                if step_idx == 0:
-                    print(f"[rollout] Step 0: Starting first iteration")
-                elif step_idx % 50 == 0:
-                    print(f"[rollout] Step {step_idx}: Progress checkpoint")
-                
                 # Check if motion is complete before doing anything
                 if n_ctrl_steps is None and self._command_provider is not None:
                     if self._command_provider.current_frame is None:
-                        print(f"[rollout] Motion completed at step {step_idx}")
                         logger.info("Motion completed at step %d", step_idx)
                         break
                 
@@ -189,28 +170,17 @@ class EpisodeRollout:
                 if self._command_provider is not None and self._command_provider.current_frame is not None:
                     command_frame = self._command_provider.current_frame.copy()
                 
-                if step_idx == 0:
-                    print(f"[rollout] Step 0: Calling runner.step_and_take_action()...")
                 # Inference and action in one call (new PyModelRunner API)
                 self._runner.step_and_take_action()
                 
-                if step_idx == 0:
-                    print(f"[rollout] Step 0: Inference complete, advancing command frame...")
                 # Advance to next frame after inference
                 if self._command_provider and hasattr(self._command_provider, "step"):
                     self._command_provider.step()
 
-                if step_idx == 0:
-                    print(f"[rollout] Step 0: Running simulation for {self._sim.sim_decimation} substeps...")
                 # Run simulation for one control step
                 for _ in range(self._sim.sim_decimation):
                     await self._sim.step()
-                
-                if step_idx == 0:
-                    print(f"[rollout] Step 0: Simulation steps complete")
 
-                if step_idx == 0:
-                    print(f"[rollout] Step 0: Collecting data from provider...")
                 # Get arrays from the ModelProvider
                 arrays_copy: dict[str, np.ndarray] = {}
                 action_copy: np.ndarray = np.array([])
@@ -223,8 +193,6 @@ class EpisodeRollout:
                     # Get action from arrays if available
                     action_copy = arrays_copy.get("action", np.array([]))
 
-                if step_idx == 0:
-                    print(f"[rollout] Step 0: Writing to {len(self._sinks)} sinks...")
                 snap = StepSnapshot(
                     step_idx=step_idx,
                     time_s=step_idx * dt_ctrl,
@@ -235,16 +203,10 @@ class EpisodeRollout:
                 )
                 for sink in self._sinks:
                     sink.on_step(snap)
-
-                if step_idx == 0:
-                    print(f"[rollout] Step 0: First iteration complete!")
                 
                 await asyncio.sleep(0)
                 step_idx += 1
         finally:
-            print(f"[rollout] Rollout finished after {step_idx} steps, closing sinks...")
             for sink in self._sinks:
                 sink.close()
-            print(f"[rollout] Closing simulator...")
             await self._sim.close()
-            print(f"[rollout] Rollout cleanup complete")
