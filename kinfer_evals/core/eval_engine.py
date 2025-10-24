@@ -11,10 +11,10 @@ from kmotions.motions import MOTIONS
 
 from kinfer_evals.artifacts.plots import render_artifacts
 from kinfer_evals.core.eval_types import RunArgs, RunInfo
-from kinfer_evals.core.eval_utils import load_sim_and_runner
+from kinfer_evals.core.eval_utils import load_joint_names, load_sim_and_runner
 from kinfer_evals.core.io_h5 import EpisodeReader
 from kinfer_evals.core.metrics import compute_metrics
-from kinfer_evals.core.rollout import EpisodeRollout, H5Sink, StepSink, VideoSink
+from kinfer_evals.core.rollout import EpisodeRollout, H5Sink, KinferLogSink, StepSink, VideoSink
 from kinfer_evals.publishers.notion import push_summary
 
 logger = logging.getLogger(__name__)
@@ -41,6 +41,9 @@ async def _run_episode_to_h5(
     # Get the motion factory from kmotions
     motion_factory = MOTIONS[motion_name]
     
+    # Load joint names from kinfer file
+    joint_names = load_joint_names(args.kinfer)
+    
     sim, runner, command_provider, provider = await load_sim_and_runner(
         args.kinfer,
         args.robot,
@@ -56,8 +59,16 @@ async def _run_episode_to_h5(
     outdir.mkdir(parents=True, exist_ok=True)
     h5_path = outdir / "episode.h5"
 
-    # sinks: HDF5 (always) + video if allowed
-    sinks: list[StepSink] = [H5Sink(h5_path, sim, run_info=run_info)]
+    # Prepare run name: kinfer_motion_timestamp
+    kinfer_stem = args.kinfer.stem
+    timestamp = run_info["timestamp"]
+    run_name = f"{kinfer_stem}_{motion_name}_{timestamp}"
+
+    # sinks: HDF5 (always) + kinfer logs (always) + video if allowed
+    sinks: list[StepSink] = [
+        H5Sink(h5_path, sim, run_info=run_info),
+        KinferLogSink(outdir, run_name, joint_names),
+    ]
     want_video = not args.render
     if want_video:
         try:
@@ -69,7 +80,7 @@ async def _run_episode_to_h5(
         except Exception as exc:
             logger.warning("Failed to init VideoSink: %s", exc)
 
-    rollout = EpisodeRollout(sim, runner, command_provider, provider, sinks)
+    rollout = EpisodeRollout(sim, runner, command_provider, provider, sinks, joint_names)
     await rollout.run(duration_seconds)
     return h5_path
 

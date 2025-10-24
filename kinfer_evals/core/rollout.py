@@ -4,14 +4,14 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 import numpy as np
 from kinfer.rust_bindings import PyModelRunner
 from kinfer_sim.provider import ModelProvider
 from kinfer_sim.simulator import MujocoSimulator
 from kmv.app.viewer import DefaultMujocoViewer
-from kmv.utils.logging import VideoWriter
+from kmv.utils.logging import VideoWriter, save_logs
 
 from kinfer_evals.core.eval_types import CommandProvider, RunInfo
 from kinfer_evals.core.io_h5 import EpisodeWriter
@@ -56,6 +56,57 @@ class H5Sink:
         self._writer.close()
 
 
+class KinferLogSink:
+    """Collects kinfer-sim style logs (provider.arrays per step)."""
+    
+    def __init__(self, outdir: Path, run_name: str, joint_names: list[str]) -> None:
+        self._logs: list[dict[str, Any]] = []
+        self._outdir = outdir
+        self._run_name = run_name
+        self._joint_names = joint_names
+        self._log_path: Path | None = None
+    
+    def on_step(self, snap: StepSnapshot) -> None:
+        # Collect all arrays from provider plus metadata
+        log_entry = {
+            "step_id": snap.step_idx,
+            **snap.inputs,  # All provider.arrays
+            "joint_order": np.asarray(self._joint_names),
+        }
+        self._logs.append(log_entry)
+    
+    def close(self) -> None:
+        if self._logs:
+            self._outdir.mkdir(parents=True, exist_ok=True)
+            # Save directly in outdir, not in a subdirectory
+            self._log_path = self._outdir / "kinfer_log.ndjson"
+            save_logs(self._logs, str(self._outdir / "kinfer_log"))
+            logger.info("Saved kinfer logs to %s", self._log_path)
+            
+            # Create symlink in telemetry directory
+            self._create_telemetry_symlink()
+    
+    def _create_telemetry_symlink(self) -> None:
+        """Create a symlink in ~/robot_telemetry/kinfer-evals/{run_name}/"""
+        if self._log_path is None or not self._log_path.exists():
+            return
+        
+        telemetry_dir = Path.home() / "robot_telemetry" / "kinfer-evals" / self._run_name
+        try:
+            telemetry_dir.mkdir(parents=True, exist_ok=True)
+            symlink_path = telemetry_dir / "kinfer_log.ndjson"
+            
+            # Remove existing symlink if present
+            if symlink_path.exists() or symlink_path.is_symlink():
+                symlink_path.unlink()
+            
+            # Create symlink
+            symlink_path.symlink_to(self._log_path.absolute())
+            logger.info("Created symlink at %s", symlink_path)
+        except Exception as e:
+            logger.warning("Failed to create telemetry symlink: %s", e)
+
+
 class VideoSink:
     """Writes a 30 FPS mp4 using GLFW viewer frames, if available."""
 
@@ -84,12 +135,14 @@ class EpisodeRollout:
         command_provider: CommandProvider | None,
         provider: ModelProvider | None,
         sinks: list[StepSink],
+        joint_names: list[str],
     ) -> None:
         self._sim = sim
         self._runner = runner
         self._command_provider = command_provider
         self._provider = provider
         self._sinks = sinks
+        self._joint_names = joint_names
 
     async def run(self, seconds: float | None) -> None:
         dt_ctrl = 1.0 / self._sim._control_frequency
@@ -101,7 +154,6 @@ class EpisodeRollout:
             n_ctrl_steps = None  # Run indefinitely until motion completes
 
         step_idx = 0
-        logger.info("Starting rollout, n_ctrl_steps=%s", n_ctrl_steps)
 
         try:
             while n_ctrl_steps is None or step_idx < n_ctrl_steps:
@@ -110,10 +162,6 @@ class EpisodeRollout:
                     if self._command_provider.current_frame is None:
                         logger.info("Motion completed at step %d", step_idx)
                         break
-                
-                if step_idx % 50 == 0:
-                    logger.info("Step %d, current_frame is None: %s", step_idx, 
-                               self._command_provider.current_frame is None if self._command_provider else "no provider")
                 
                 # Get current command frame
                 command_frame = {}
@@ -135,6 +183,10 @@ class EpisodeRollout:
                 arrays_copy: dict[str, np.ndarray] = {}
                 action_copy: np.ndarray = np.array([])
                 if self._provider is not None and hasattr(self._provider, "arrays"):
+                    # Add joint torques to arrays like kinfer-sim does
+                    torque = self._sim.get_torques(self._joint_names)
+                    self._provider.arrays["joint_torques"] = torque
+                    
                     arrays_copy = {k: v.copy() for k, v in self._provider.arrays.items()}
                     # Get action from arrays if available
                     action_copy = arrays_copy.get("action", np.array([]))

@@ -46,6 +46,32 @@ def load_command_names(kinfer_path: Path) -> list[str]:
     return list(command_names)
 
 
+def load_joint_names(kinfer_path: Path) -> list[str]:
+    """Load joint_names from kinfer metadata.json.
+    
+    Args:
+        kinfer_path: Path to the .kinfer file
+        
+    Returns:
+        List of joint names
+    """
+    try:
+        with tarfile.open(kinfer_path, "r:gz") as tar:
+            metadata_file = tar.extractfile("metadata.json")
+            if metadata_file is None:
+                raise FileNotFoundError("'metadata.json' not found in archive")
+            metadata = json.loads(metadata_file.read().decode("utf-8"))
+    except (tarfile.TarError, FileNotFoundError) as exc:
+        raise ValueError(f"Could not read metadata from {kinfer_path}: {exc}") from exc
+
+    joint_names = metadata.get("joint_names", None)
+    if not joint_names:
+        raise ValueError(f"'joint_names' missing in metadata for {kinfer_path}")
+
+    logger.info("Loaded %d joint names from model metadata", len(joint_names))
+    return list(joint_names)
+
+
 def get_yaw_from_quaternion(quat: np.ndarray) -> float:
     """Extract yaw angle from quaternion data."""
     return float(
