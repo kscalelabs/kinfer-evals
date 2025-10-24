@@ -78,9 +78,10 @@ class KinferLogSink:
     def close(self) -> None:
         if self._logs:
             self._outdir.mkdir(parents=True, exist_ok=True)
-            # Save directly in outdir, not in a subdirectory
-            self._log_path = self._outdir / "kinfer_log.ndjson"
+            # save_logs creates a directory with the given name and saves kinfer_log.ndjson inside it
             save_logs(self._logs, str(self._outdir / "kinfer_log"))
+            # Update log path to reflect where the file actually gets saved
+            self._log_path = self._outdir / "kinfer_log" / "kinfer_log.ndjson"
             logger.info("Saved kinfer logs to %s", self._log_path)
             
             # Create symlink in telemetry directory
@@ -89,9 +90,14 @@ class KinferLogSink:
     def _create_telemetry_symlink(self) -> None:
         """Create a symlink in ~/robot_telemetry/kinfer-evals/{run_name}/"""
         if self._log_path is None or not self._log_path.exists():
+            print(f"[kinfer-log] ⚠️  Log path does not exist, skipping telemetry symlink: {self._log_path}")
+            logger.warning("No log path found, skipping telemetry symlink creation")
             return
         
         telemetry_dir = Path.home() / "robot_telemetry" / "kinfer-evals" / self._run_name
+        print(f"[kinfer-log] Creating telemetry symlink...")
+        print(f"[kinfer-log]   Source: {self._log_path}")
+        print(f"[kinfer-log]   Target: {telemetry_dir / 'kinfer_log.ndjson'}")
         try:
             telemetry_dir.mkdir(parents=True, exist_ok=True)
             symlink_path = telemetry_dir / "kinfer_log.ndjson"
@@ -102,8 +108,10 @@ class KinferLogSink:
             
             # Create symlink
             symlink_path.symlink_to(self._log_path.absolute())
+            print(f"[kinfer-log] ✅ Created symlink at: {symlink_path}")
             logger.info("Created symlink at %s", symlink_path)
         except Exception as e:
+            print(f"[kinfer-log] ❌ Failed to create telemetry symlink: {e}")
             logger.warning("Failed to create telemetry symlink: %s", e)
 
 
