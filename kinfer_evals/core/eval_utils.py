@@ -109,8 +109,10 @@ async def load_sim_and_runner(
     **sim_kwargs: object,
 ) -> tuple[MujocoSimulator, PyModelRunner, CommandProvider, ModelProvider]:
     """Shared download + construction logic."""
+    print(f"[eval-utils] Loading command names from kinfer metadata...")
     # Load command_names from kinfer metadata
     command_names = load_command_names(kinfer)
+    print(f"[eval-utils] Loaded {len(command_names)} command names: {command_names}")
     
     # Optional overrides via sim_kwargs from RunArgs: local_model_dir
     local_model_dir_obj: Optional[Union[str, Path]] = cast(
@@ -118,25 +120,41 @@ async def load_sim_and_runner(
     )
     if local_model_dir_obj is not None:
         model_dir = Path(local_model_dir_obj)
+        print(f"[eval-utils] Using local model directory: {model_dir}")
+        print(f"[eval-utils] Fetching robot metadata from K-Scale API...")
         async with K() as api:
             meta = await get_model_metadata(api, robot)
+        print(f"[eval-utils] Robot metadata retrieved")
     else:
+        print(f"[eval-utils] Downloading robot URDF from K-Scale API...")
         async with K() as api:
             model_dir, meta = await asyncio.gather(
                 api.download_and_extract_urdf(robot, cache=True),
                 get_model_metadata(api, robot),
             )
+        print(f"[eval-utils] Robot URDF downloaded to: {model_dir}")
 
+    print(f"[eval-utils] Finding MJCF file in model directory...")
     mjcf = find_mjcf(model_dir)
+    print(f"[eval-utils] Found MJCF: {mjcf}")
+    
+    print(f"[eval-utils] Creating MuJoCo simulator...")
     sim = make_sim(mjcf, meta, **sim_kwargs)
+    print(f"[eval-utils] Simulator created with control frequency: {sim._control_frequency} Hz")
     
     # Create motion with dt based on sim control frequency
     dt = 1.0 / sim._control_frequency
+    print(f"[eval-utils] Creating motion with dt={dt:.4f}s...")
     motion = motion_factory(dt)
+    print(f"[eval-utils] Motion created")
     
     # Create command provider with motion and command_names
+    print(f"[eval-utils] Creating command provider...")
     command_provider = CommandProvider(motion, command_names)
+    print(f"[eval-utils] Creating model provider...")
     # ModelProvider now takes command_provider instead of keyboard_state
     provider = ModelProvider(sim, command_provider=command_provider)
+    print(f"[eval-utils] Initializing PyModelRunner with kinfer file: {kinfer}")
     runner = PyModelRunner(str(kinfer), provider, pre_fetch_time_ms=None)
+    print(f"[eval-utils] PyModelRunner initialized successfully")
     return sim, runner, command_provider, provider
