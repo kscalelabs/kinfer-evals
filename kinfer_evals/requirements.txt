@@ -1,6 +1,6 @@
 # requirements.txt
 
-kinfer-sim
+kinfer-sim>=0.0.93
 kscale
 colorlogging
 tabulate
