@@ -7,13 +7,13 @@ from pathlib import Path
 from typing import Sequence
 
 import numpy as np
-from kinfer_sim.server import load_joint_names
 from matplotlib import colors, pyplot as plt
 from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
 from matplotlib.ticker import MaxNLocator
 
 from kinfer_evals.core.eval_types import EpisodeData, RunInfo
+from kinfer_evals.core.eval_utils import load_joint_names
 from kinfer_evals.core.metrics import (
     body_frame_vel,
     compute_double_support_intervals,
