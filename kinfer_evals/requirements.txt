@@ -1,9 +1,10 @@
 # requirements.txt
 
-kinfer-sim
+kinfer-sim>=0.0.94
 kscale
 colorlogging
 tabulate
+kmotions>=0.3.8
 
 notion-client
 h5py

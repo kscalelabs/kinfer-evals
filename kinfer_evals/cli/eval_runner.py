@@ -5,13 +5,16 @@ CLI driver:  kinfer-eval  <policy>  <robot>  <eval-name>  [--out] [--render]
 
 import argparse
 import asyncio
+import logging
 from pathlib import Path
 
 import colorlogging
+from kmotions.motions import MOTIONS
 
 from kinfer_evals.core.eval_engine import run_eval
 from kinfer_evals.core.eval_types import RunArgs
-from kinfer_evals.evals import REGISTRY
+
+logger = logging.getLogger(__name__)
 
 
 def main() -> None:
@@ -20,7 +23,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(prog="kinfer-eval")
     parser.add_argument("kinfer", type=Path)
     parser.add_argument("robot")
-    parser.add_argument("eval", choices=sorted(REGISTRY.keys()))
+    parser.add_argument("motion", choices=sorted(MOTIONS.keys()), help="Motion name from kmotions")
     parser.add_argument("--out", type=Path, default=Path("runs"))
     parser.add_argument(
         "--render",
@@ -41,9 +44,8 @@ def main() -> None:
     )
 
     ns = parser.parse_args()
-    make = REGISTRY[ns.eval]
     args = RunArgs(
-        ns.eval,
+        ns.motion,
         ns.kinfer,
         ns.robot,
         ns.out,
@@ -51,9 +53,12 @@ def main() -> None:
         local_model_dir=ns.local_model_dir,
         command_type=ns.command_type,
     )
-    url = asyncio.run(run_eval(make, ns.eval, args))
+    logger.info("Starting asyncio.run(run_eval)...")
+    url = asyncio.run(run_eval(ns.motion, args))
+    logger.info("asyncio.run completed, url=%s", url)
     if url:
         print(url)
+    logger.info("eval_runner main() exiting")
 
 
 if __name__ == "__main__":

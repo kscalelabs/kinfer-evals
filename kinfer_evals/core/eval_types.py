@@ -2,11 +2,11 @@
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, Protocol, TypedDict
+from typing import Optional, Protocol, Sequence, TypedDict
 
 import numpy as np
 import numpy.typing as npt
-from kinfer_sim.provider import InputState
+from kmotions.motions import Motion
 
 F32 = np.float32
 I16 = np.int16
@@ -30,9 +30,9 @@ class RunArgs:
 
 
 class CommandFactory(Protocol):
-    """Anything that returns an InputState-compatible object."""
+    """Factory that creates a Motion."""
 
-    def __call__(self) -> InputState: ...
+    def __call__(self, dt: float) -> Motion: ...
 
 
 class RunInfo(TypedDict):
@@ -50,7 +50,7 @@ class EpisodeData:
     qvel: Array2  # (T, nv)
     actuator_force: Array2  # (T, nu)
     action_target: Optional[Array2]  # (T, nu) or None
-    cmd_vel: Array2  # (T, 3)  [vx, vy, omega]
+    commands: dict[str, Array1]  # {cmd_name -> (T,)} command values over time
     contact_wrench: list[np.ndarray]  # list[(6*ncon_t,)] float32 per step
     contact_body: list[np.ndarray]  # list[(2*ncon_t,)] int16 per step
     contact_count: Int1  # (T,)
@@ -61,18 +61,47 @@ class EpisodeData:
     inputs: dict[str, Array2] = field(default_factory=dict)
 
 
-class PrecomputedInputState(InputState):
-    """InputState that walks through a pre-computed command list."""
+class CommandProvider:
+    """Command provider that uses kmotions Motion objects.
 
-    def __init__(self, commands: list[list[float]]) -> None:
-        self._cmds = commands
-        self._idx = 0
-        self.value = self._cmds[0]
+    Compatible with kinfer-sim's ModelProvider interface which expects:
+    - get_cmd(command_names: Sequence[str]) -> list[float]
+    """
 
-    async def update(self, _key: str) -> None:  # not used here
-        pass
+    def __init__(self, motion: Motion, command_names: Sequence[str]) -> None:
+        """Initialize with a kmotions Motion object.
 
-    def step(self) -> None:  # advance one tick
-        if self._idx + 1 < len(self._cmds):
-            self._idx += 1
-            self.value = self._cmds[self._idx]
+        Args:
+            motion: kmotions Motion object that generates motion frames
+            command_names: List of command names from kinfer metadata
+        """
+        self._motion = motion
+        self._command_names = command_names
+        self._current_frame = motion.get_next_motion_frame()
+        if self._current_frame is None:
+            raise ValueError("Motion object produced no frames")
+
+    def get_cmd(self, command_names: Sequence[str]) -> list[float]:
+        """Get current command vector, extracting named commands from motion frame.
+
+        Args:
+            command_names: Sequence of command names to extract.
+
+        Returns:
+            List of floats corresponding to the requested command names, using .get() with default 0.0.
+        """
+        if self._current_frame is None:
+            return [0.0] * len(command_names)
+        # Extract values from the motion frame dict using .get() with default 0.0
+        return [self._current_frame.get(name, 0.0) for name in command_names]
+
+    def step(self) -> None:
+        """Advance to the next motion frame."""
+        next_frame = self._motion.get_next_motion_frame()
+        # Always update current_frame, even if None (motion complete)
+        self._current_frame = next_frame
+
+    @property
+    def current_frame(self) -> dict[str, float] | None:
+        """Get the current motion frame."""
+        return self._current_frame
