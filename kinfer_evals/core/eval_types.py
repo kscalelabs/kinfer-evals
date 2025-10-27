@@ -63,14 +63,14 @@ class EpisodeData:
 
 class CommandProvider:
     """Command provider that uses kmotions Motion objects.
-    
+
     Compatible with kinfer-sim's ModelProvider interface which expects:
     - get_cmd(command_names: Sequence[str]) -> list[float]
     """
 
     def __init__(self, motion: Motion, command_names: Sequence[str]) -> None:
         """Initialize with a kmotions Motion object.
-        
+
         Args:
             motion: kmotions Motion object that generates motion frames
             command_names: List of command names from kinfer metadata
@@ -83,10 +83,10 @@ class CommandProvider:
 
     def get_cmd(self, command_names: Sequence[str]) -> list[float]:
         """Get current command vector, extracting named commands from motion frame.
-        
+
         Args:
             command_names: Sequence of command names to extract.
-            
+
         Returns:
             List of floats corresponding to the requested command names, using .get() with default 0.0.
         """

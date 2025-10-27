@@ -580,7 +580,9 @@ def render_artifacts(episode: EpisodeData, run_info: RunInfo, output_dir: Path) 
     if gait_freqs:
         artifact_paths.append(plot_gait_frequency(time_s, gait_freqs, plots_dir, run_info))
 
-    ds_intervals = compute_double_support_intervals(n_foot_con, dt, np.column_stack([command_vx, command_vy, command_omega]))
+    ds_intervals = compute_double_support_intervals(
+        n_foot_con, dt, np.column_stack([command_vx, command_vy, command_omega])
+    )
     if ds_intervals:
         artifact_paths.append(plot_double_support_intervals(time_s, ds_intervals, plots_dir, run_info))
 

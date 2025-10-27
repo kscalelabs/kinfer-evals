@@ -5,9 +5,8 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-from kmv.app.viewer import DefaultMujocoViewer
-
 from kmotions.motions import MOTIONS
+from kmv.app.viewer import DefaultMujocoViewer
 
 from kinfer_evals.artifacts.plots import render_artifacts
 from kinfer_evals.core.eval_types import RunArgs, RunInfo
@@ -40,10 +39,10 @@ async def _run_episode_to_h5(
     """Spin up sim & runner, play motion, and record to HDF5."""
     # Get the motion factory from kmotions
     motion_factory = MOTIONS[motion_name]
-    
+
     # Load joint names from kinfer file
     joint_names = load_joint_names(args.kinfer)
-    
+
     sim, runner, command_provider, provider = await load_sim_and_runner(
         args.kinfer,
         args.robot,
@@ -52,7 +51,7 @@ async def _run_episode_to_h5(
         free_camera=False,
         local_model_dir=args.local_model_dir,
     )
-    
+
     # Run until motion completes (returns None) - determined by rollout
     duration_seconds = None  # Will run until motion completes
 

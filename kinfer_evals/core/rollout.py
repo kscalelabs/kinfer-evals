@@ -58,14 +58,14 @@ class H5Sink:
 
 class KinferLogSink:
     """Collects kinfer-sim style logs (provider.arrays per step)."""
-    
+
     def __init__(self, outdir: Path, run_name: str, joint_names: list[str]) -> None:
         self._logs: list[dict[str, Any]] = []
         self._outdir = outdir
         self._run_name = run_name
         self._joint_names = joint_names
         self._log_path: Path | None = None
-    
+
     def on_step(self, snap: StepSnapshot) -> None:
         # Collect all arrays from provider plus metadata
         log_entry = {
@@ -74,7 +74,7 @@ class KinferLogSink:
             "joint_order": np.asarray(self._joint_names),
         }
         self._logs.append(log_entry)
-    
+
     def close(self) -> None:
         if self._logs:
             self._outdir.mkdir(parents=True, exist_ok=True)
@@ -83,25 +83,25 @@ class KinferLogSink:
             # Update log path to reflect where the file actually gets saved
             self._log_path = self._outdir / "kinfer_log" / "kinfer_log.ndjson"
             logger.info("Saved kinfer logs to %s", self._log_path)
-            
+
             # Create symlink in telemetry directory
             self._create_telemetry_symlink()
-    
+
     def _create_telemetry_symlink(self) -> None:
-        """Create a symlink in ~/robot_telemetry/kinfer-evals/{run_name}/"""
+        """Create a symlink in ~/robot_telemetry/kinfer-evals/{run_name}/ ."""
         if self._log_path is None or not self._log_path.exists():
             logger.warning("No log path found, skipping telemetry symlink creation")
             return
-        
+
         telemetry_dir = Path.home() / "robot_telemetry" / "kinfer-evals" / self._run_name
         try:
             telemetry_dir.mkdir(parents=True, exist_ok=True)
             symlink_path = telemetry_dir / "kinfer_log.ndjson"
-            
+
             # Remove existing symlink if present
             if symlink_path.exists() or symlink_path.is_symlink():
                 symlink_path.unlink()
-            
+
             # Create symlink
             symlink_path.symlink_to(self._log_path.absolute())
             logger.info("Created symlink at %s", symlink_path)
@@ -148,7 +148,7 @@ class EpisodeRollout:
 
     async def run(self, seconds: float | None) -> None:
         dt_ctrl = 1.0 / self._sim._control_frequency
-        
+
         # If seconds is None, run until motion completes
         if seconds is not None:
             n_ctrl_steps = int(round(seconds * self._sim._control_frequency))
@@ -164,15 +164,15 @@ class EpisodeRollout:
                     if self._command_provider.current_frame is None:
                         logger.info("Motion completed at step %d", step_idx)
                         break
-                
+
                 # Get current command frame
                 command_frame = {}
                 if self._command_provider is not None and self._command_provider.current_frame is not None:
                     command_frame = self._command_provider.current_frame.copy()
-                
+
                 # Inference and action in one call (new PyModelRunner API)
                 self._runner.step_and_take_action()
-                
+
                 # Advance to next frame after inference
                 if self._command_provider and hasattr(self._command_provider, "step"):
                     self._command_provider.step()
@@ -188,7 +188,7 @@ class EpisodeRollout:
                     # Add joint torques to arrays like kinfer-sim does
                     torque = self._sim.get_torques(self._joint_names)
                     self._provider.arrays["joint_torques"] = torque
-                    
+
                     arrays_copy = {k: v.copy() for k, v in self._provider.arrays.items()}
                     # Get action from arrays if available
                     action_copy = arrays_copy.get("action", np.array([]))
@@ -203,7 +203,7 @@ class EpisodeRollout:
                 )
                 for sink in self._sinks:
                     sink.on_step(snap)
-                
+
                 await asyncio.sleep(0)
                 step_idx += 1
         finally:
@@ -212,11 +212,11 @@ class EpisodeRollout:
             if hasattr(self._runner, "close"):
                 logger.info("Closing PyModelRunner...")
                 self._runner.close()
-            
+
             # Clean up sinks
             for sink in self._sinks:
                 sink.close()
-            
+
             # Clean up simulator last
             logger.info("Closing simulator...")
             await self._sim.close()

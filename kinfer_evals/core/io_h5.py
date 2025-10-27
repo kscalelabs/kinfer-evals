@@ -226,14 +226,14 @@ class EpisodeReader:
             contact_count: Int1 = f["contact_count"][:].astype(np.int16)
             contact_force_mag: Array1 = f["contact_force_mag"][:].astype(F32)
             body_names = [n.decode() if isinstance(n, bytes) else str(n) for n in f["body_names"][:]]
-            
+
             # Collect command frame values (all datasets named command_*)
             commands: dict[str, Array1] = {}
             for key in f.keys():
                 if key.startswith("command_"):
                     name = key[8:]  # Remove "command_" prefix
                     commands[name] = f[key][:].astype(F32)
-            
+
             # Collect policy inputs (all fixed-width 2D datasets named input_*)
             inputs: dict[str, Array2] = {}
             for key in f.keys():

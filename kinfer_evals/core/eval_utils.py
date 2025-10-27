@@ -22,10 +22,10 @@ logger = logging.getLogger(__name__)
 
 def load_command_names(kinfer_path: Path) -> list[str]:
     """Load command_names from kinfer metadata.json.
-    
+
     Args:
         kinfer_path: Path to the .kinfer file
-        
+
     Returns:
         List of command names
     """
@@ -48,10 +48,10 @@ def load_command_names(kinfer_path: Path) -> list[str]:
 
 def load_joint_names(kinfer_path: Path) -> list[str]:
     """Load joint_names from kinfer metadata.json.
-    
+
     Args:
         kinfer_path: Path to the .kinfer file
-        
+
     Returns:
         List of joint names
     """
@@ -112,7 +112,7 @@ async def load_sim_and_runner(
     # Load command_names from kinfer metadata
     command_names = load_command_names(kinfer)
     logger.info("Loaded %d command names from model metadata", len(command_names))
-    
+
     # Optional overrides via sim_kwargs from RunArgs: local_model_dir
     local_model_dir_obj: Optional[Union[str, Path]] = cast(
         Optional[Union[str, Path]], sim_kwargs.pop("local_model_dir", None)
@@ -130,11 +130,11 @@ async def load_sim_and_runner(
 
     mjcf = find_mjcf(model_dir)
     sim = make_sim(mjcf, meta, **sim_kwargs)
-    
+
     # Create motion with dt based on sim control frequency
     dt = 1.0 / sim._control_frequency
     motion = motion_factory(dt)
-    
+
     # Create command provider with motion and command_names
     command_provider = CommandProvider(motion, command_names)
     # ModelProvider now takes command_provider instead of keyboard_state

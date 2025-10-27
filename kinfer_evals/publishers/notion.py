@@ -149,7 +149,9 @@ def push_summary(
         if files:
             logger.info("Uploading %d files to Notion page", len(files))
             # Put videos first, then all other files
-            files_sorted = sorted(files, key=lambda p: (p.suffix.lower() not in {".mp4", ".mov", ".mkv", ".webm"}, p.name))
+            files_sorted = sorted(
+                files, key=lambda p: (p.suffix.lower() not in {".mp4", ".mov", ".mkv", ".webm"}, p.name)
+            )
 
             children: list[dict[str, object]] = []
             for i, p in enumerate(files_sorted, 1):
@@ -179,7 +181,7 @@ def push_summary(
                     logger.error("Failed to upload file %s: %s", p.name, e)
                     # Continue with other files instead of failing completely
                     continue
-            
+
             if children:
                 logger.info("Attaching %d uploaded files to Notion page", len(children))
                 # append in a single PATCH
